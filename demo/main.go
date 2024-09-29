@@ -3,16 +3,16 @@ package main
 import (
 	"embed"
 	"io/fs"
-	"litelog"
 	"log/slog"
 	"net/http"
 	"os"
 	"path"
+	"sqlog"
 	"strings"
 )
 
 var (
-	sqlog litelog.Log
+	log sqlog.Log
 
 	dev = true
 
@@ -21,17 +21,17 @@ var (
 )
 
 func init() {
-	if log, err := litelog.New(&litelog.Config{}); err != nil {
+	if l, err := sqlog.New(&sqlog.Config{}); err != nil {
 		panic(err)
 	} else {
-		sqlog = log
-		slog.SetDefault(slog.New(log.Handler()))
+		log = l
+		slog.SetDefault(slog.New(l.Handler()))
 	}
 }
 
 func main() {
 
-	sqlogHttpHandler := sqlog.HttpHandler()
+	logHttpHandler := log.HttpHandler()
 	staticHttpHandler := getStaticHandler()
 
 	httpHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +39,7 @@ func main() {
 
 		if idx := strings.LastIndex(p, "/logs"); idx >= 0 {
 
-			sqlogHttpHandler.ServeHTTP(w, r)
+			logHttpHandler.ServeHTTP(w, r)
 
 		} else if p == "/debug" {
 
@@ -66,14 +66,6 @@ func main() {
 			slog.Log(r.Context(), l, msg, args...)
 
 		} else {
-			// switch path.Ext(p) {
-			// case ".html", ".css", ".js":
-			// 	p = path.Base(p)
-			// default:
-			// 	p = ""
-			// }
-
-			// r.URL.Path = p
 			staticHttpHandler.ServeHTTP(w, r)
 		}
 	})

@@ -1,4 +1,4 @@
-package litelog
+package sqlog
 
 import (
 	"errors"
@@ -16,11 +16,11 @@ var ErrClosed = errors.New("the Ingester was already closed")
 // none was explicitly set.
 const interval = 100 * time.Millisecond
 
-type ingester struct {
-	store        *store
-	writeChunkId int32
-	flushChunk   *chunk // chunk que será salvo na base de dados
-	writeChunk   *chunk // chunk que está recebendo registros de log
+type ingesterImpl struct {
+	store       *storageImpl
+	writeHeadId int32
+	flushHead   *chunk // chunk que será salvo na base de dados
+	writeHead   *chunk // chunk que está recebendo registros de log
 	// These two channels are used to synchronize the Ingester shutting down when
 	// `close` is called.
 	// The first channel is closed to signal the backend goroutine that it has
@@ -30,16 +30,16 @@ type ingester struct {
 	shutdown chan struct{}
 }
 
-func newIngester(config *Config, store *store) (*ingester, error) {
+func newIngester(config *Config, store *storageImpl) (*ingesterImpl, error) {
 
 	c := &chunk{}
 	c.init(5)
 
-	i := &ingester{
-		writeChunkId: c.id,
-		flushChunk:   c,
-		writeChunk:   c,
-		store:        store,
+	i := &ingesterImpl{
+		writeHeadId: c.id,
+		flushHead:   c,
+		writeHead:   c,
+		store:       store,
 	}
 
 	go i.loop()
@@ -47,23 +47,23 @@ func newIngester(config *Config, store *store) (*ingester, error) {
 	return i, nil
 }
 
-func (i *ingester) ingest(t time.Time, level int8, content []byte) error {
+func (i *ingesterImpl) ingest(t time.Time, level int8, content []byte) error {
 
-	into, accepted := i.writeChunk.offer(&entry{
+	into, accepted := i.writeHead.offer(&entry{
 		time:    t,
 		level:   level,
 		content: content,
 	})
-	if !accepted && atomic.CompareAndSwapInt32(&i.writeChunkId, i.writeChunkId, into.id) {
+	if !accepted && atomic.CompareAndSwapInt32(&i.writeHeadId, i.writeHeadId, into.id) {
 		// o chunk está cheio, aponta para o proximo
-		i.writeChunk = into
+		i.writeHead = into
 	}
 
 	return nil
 }
 
 // Batch loop.
-func (i *ingester) loop() {
+func (i *ingesterImpl) loop() {
 	defer close(i.shutdown)
 
 	wg := &sync.WaitGroup{}
@@ -77,26 +77,26 @@ func (i *ingester) loop() {
 
 		case <-tick.C:
 
-			chunk := i.flushChunk
+			chunk := i.flushHead
 			if !chunk.isEmpty() {
 				if chunk.isFull() {
 					// write
-					if err := i.store.write(chunk); err != nil {
+					if err := i.store.flush(chunk); err != nil {
 						chunk.retries++
-						slog.Error("[litelog] error writing chunk", slog.Any("error", err))
+						slog.Error("[sqlog] error writing chunk", slog.Any("error", err))
 
 						if chunk.retries > 3 {
-							i.flushChunk = chunk.next
-							i.flushChunk.init(5)
+							i.flushHead = chunk.next
+							i.flushHead.init(5)
 						}
 					} else {
-						i.flushChunk = chunk.next
-						i.flushChunk.init(5)
+						i.flushHead = chunk.next
+						i.flushHead.init(5)
 					}
 				} else if chunk.ttl().Seconds() > 4 {
 					// bloqueia a escrita no chunk para que possa ser persistido nos próximos ticks
 					chunk.lock()
-					i.flushChunk.init(5)
+					i.flushHead.init(5)
 				}
 			}
 
@@ -105,7 +105,7 @@ func (i *ingester) loop() {
 			// faz o flush de todos os logs
 			tick.Stop()
 
-			chunk := i.flushChunk
+			chunk := i.flushHead
 			chunk.lock()
 
 			for {
@@ -115,7 +115,7 @@ func (i *ingester) loop() {
 
 				if chunk.isFull() {
 					// write
-					i.store.write(chunk)
+					i.store.flush(chunk)
 					chunk = chunk.next
 					chunk.lock()
 				} else {
@@ -126,7 +126,7 @@ func (i *ingester) loop() {
 	}
 }
 
-func (i *ingester) close() (err error) {
+func (i *ingesterImpl) close() (err error) {
 	defer func() {
 		// Always recover, a panic could be raised if `c`.quit was closed which
 		// means the method was called more than once.

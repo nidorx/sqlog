@@ -1,4 +1,4 @@
-package litelog
+package sqlog
 
 import (
 	"embed"
@@ -18,7 +18,7 @@ var (
 	webFiles embed.FS
 )
 
-func (l *litelog) HttpHandler() http.Handler {
+func (l *logImpl) HttpHandler() http.Handler {
 
 	var wfs http.FileSystem
 
@@ -59,7 +59,7 @@ func (l *litelog) HttpHandler() http.Handler {
 }
 
 // ServeHTTPTicks tick api
-func (l *litelog) ServeHTTPTicks(w http.ResponseWriter, r *http.Request) {
+func (l *logImpl) ServeHTTPTicks(w http.ResponseWriter, r *http.Request) {
 	var (
 		q           = r.URL.Query()
 		expr        = q.Get("expr")
@@ -77,7 +77,7 @@ func (l *litelog) ServeHTTPTicks(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	list, err := l.store.listTicks(expr, levels, epochStart, intervalSec, maxResult)
+	list, err := l.storage.listTicks(expr, levels, epochStart, intervalSec, maxResult)
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
 		w.WriteHeader(400)
@@ -90,7 +90,7 @@ func (l *litelog) ServeHTTPTicks(w http.ResponseWriter, r *http.Request) {
 }
 
 // ServeHTTPEntries entries api. (seek method or keyset pagination {before, after})
-func (l *litelog) ServeHTTPEntries(w http.ResponseWriter, r *http.Request) {
+func (l *logImpl) ServeHTTPEntries(w http.ResponseWriter, r *http.Request) {
 	var (
 		q            = r.URL.Query()
 		expr         = q.Get("expr")
@@ -109,7 +109,7 @@ func (l *litelog) ServeHTTPEntries(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	entries, err := l.store.seekEntries(expr, levels, direction, epochEnd, nanosEnd, limitResults)
+	entries, err := l.storage.listEntries(expr, levels, direction, epochEnd, nanosEnd, limitResults)
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
 		w.WriteHeader(400)

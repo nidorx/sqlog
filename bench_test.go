@@ -1,4 +1,4 @@
-package litelog
+package sqlog
 
 import (
 	"io"
@@ -17,7 +17,7 @@ func BenchmarkSlogSimple(b *testing.B) {
 	}
 }
 
-func BenchmarkLitelogSimple(b *testing.B) {
+func BenchmarkSQLogSimple(b *testing.B) {
 	l, err := New(&Config{})
 	if err != nil {
 		b.Error(err)

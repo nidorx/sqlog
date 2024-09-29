@@ -1,4 +1,4 @@
-package litelog
+package sqlog
 
 import (
 	"bytes"
@@ -13,9 +13,9 @@ var (
 	sqlSeekPageBeforeOrder = []byte(" ORDER BY e.epoch_secs DESC, e.nanos DESC LIMIT ?")
 )
 
-// seekEntries obtém uma página de resultados (seek method or keyset pagination).
+// listEntries obtém uma página de resultados (seek method or keyset pagination).
 // A ordenação é inversa, o resultado mais antigo vem primeiro
-func (s *store) seekEntries(expr string, levels map[string]bool, direction string, epochEnd int64, nanosEnd, limitResults int) ([]any, error) {
+func (s *storageImpl) listEntries(expr string, levels map[string]bool, direction string, epochEnd int64, nanosEnd, limitResults int) ([]any, error) {
 
 	if epochEnd == 0 {
 		epochEnd = time.Now().UTC().Unix()
@@ -66,7 +66,7 @@ func (s *store) seekEntries(expr string, levels map[string]bool, direction strin
 	}
 
 	if expr = strings.TrimSpace(expr); expr != "" {
-		if compiled, err := Compile(expr); err != nil {
+		if compiled, err := compileExpr(expr); err != nil {
 			return nil, err
 		} else if compiled.Sql != "" {
 			buf.WriteString(" AND (")

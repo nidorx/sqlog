@@ -1,4 +1,4 @@
-package litelog
+package sqlog
 
 import (
 	"bytes"
@@ -40,7 +40,7 @@ var (
 )
 
 // listTicks obtém as informações sobre todas as séries no intervalo
-func (s *store) listTicks(expr string, levels map[string]bool, epochStart int64, intervalSec, maxResult int) ([]*tickModel, error) {
+func (s *storageImpl) listTicks(expr string, levels map[string]bool, epochStart int64, intervalSec, maxResult int) ([]*tickModel, error) {
 
 	if epochStart == 0 {
 		epochStart = time.Now().UTC().Unix()
@@ -100,7 +100,7 @@ func (s *store) listTicks(expr string, levels map[string]bool, epochStart int64,
 	}
 
 	if expr = strings.TrimSpace(expr); expr != "" {
-		if compiled, err := Compile(expr); err != nil {
+		if compiled, err := compileExpr(expr); err != nil {
 			return nil, err
 		} else if compiled.Sql != "" {
 			buf.WriteString(clause)

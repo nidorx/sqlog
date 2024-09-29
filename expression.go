@@ -1,5 +1,4 @@
-// uses: https://github.com/jmoiron/sqlx/blob/bc916999dc0011f5caf1f0d40e898ea9f839f4ea/named.go#L331
-package litelog
+package sqlog
 
 import (
 	"bytes"
@@ -12,20 +11,20 @@ import (
 
 var compiledCache = sync.Map{}
 
-type Compiled struct {
+type compiledExpr struct {
 	Sql  string
 	Args []any
 }
 
-// Compile a expression into an unbound query (using the '?' bindvar).
-func Compile(expression string) (*Compiled, error) {
+// compileExpr a expression into an unbound query (using the '?' bindvar).
+func compileExpr(expression string) (*compiledExpr, error) {
 	expression = strings.TrimSpace(expression)
 
 	if c, ok := compiledCache.Load(expression); ok {
-		return c.(*Compiled), nil
+		return c.(*compiledExpr), nil
 	}
 
-	s := &state{
+	s := &compileExprState{
 		args:  []any{},
 		sql:   bytes.NewBuffer(make([]byte, 0, 512)),
 		buf:   bytes.NewBuffer(make([]byte, 0, 256)),
@@ -79,7 +78,7 @@ func Compile(expression string) (*Compiled, error) {
 			}
 
 			substr := inner.String()
-			subCompiled, subErr := Compile(substr)
+			subCompiled, subErr := compileExpr(substr)
 			if subErr != nil {
 				return nil, errors.Join(fmt.Errorf("invalid expression %s ", substr), subErr)
 			}
@@ -159,7 +158,7 @@ func Compile(expression string) (*Compiled, error) {
 		return nil, err
 	}
 
-	compiled := &Compiled{
+	compiled := &compiledExpr{
 		Sql:  s.sql.String(),
 		Args: s.args,
 	}
@@ -169,7 +168,7 @@ func Compile(expression string) (*Compiled, error) {
 	return compiled, nil
 }
 
-type state struct {
+type compileExprState struct {
 	args       []any
 	inQuote    bool
 	inArray    bool
@@ -180,7 +179,7 @@ type state struct {
 	field      *bytes.Buffer // current field name
 }
 
-func (s *state) appendOperator() {
+func (s *compileExprState) appendOperator() {
 	if s.sql.Len() > 0 {
 		if s.operator == "" {
 			s.sql.WriteString(" OR ")
@@ -191,7 +190,7 @@ func (s *state) appendOperator() {
 	s.operator = ""
 }
 
-func (s *state) closeArray() error {
+func (s *compileExprState) closeArray() error {
 	if !s.inArray {
 		return nil
 	}
@@ -286,8 +285,8 @@ func (s *state) closeArray() error {
 	return nil
 }
 
-// a single term is a single word such as test or hello.
-func (s *state) appendSingleTerm() {
+// appendSingleTerm a single term is a single word such as test or hello.
+func (s *compileExprState) appendSingleTerm() {
 
 	if s.inArray {
 		if s.buf.Len() > 0 {
@@ -365,8 +364,8 @@ func (s *state) appendSingleTerm() {
 	s.field.Reset()
 }
 
-// a sequence is a group of words surrounded by double quotes, such as "hello world".
-func (s *state) appendSequence() {
+// appendSequence a sequence is a group of words surrounded by double quotes, such as "hello world".
+func (s *compileExprState) appendSequence() {
 	if s.inArray {
 		s.arrayParts = append(s.arrayParts, s.buf.String())
 		s.buf.Reset()

@@ -1,4 +1,4 @@
-package litelog
+package sqlog
 
 import (
 	"fmt"
@@ -358,7 +358,7 @@ func Test_CompileIncomplete(t *testing.T) {
 }
 
 func runTest(t *testing.T, tt testExpressionData) {
-	compiled, err := Compile(tt.expr)
+	compiled, err := compileExpr(tt.expr)
 	assert.NoError(t, err)
 	// buffer := &bytes.Buffer{}
 	// args := c.Process(nil, buffer, nil)

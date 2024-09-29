@@ -1,10 +1,12 @@
-package litelog
+package sqlog
 
 import (
 	"sync"
 	"sync/atomic"
 	"time"
 )
+
+var epoch = time.Time{}.UTC()
 
 // entry representa uma entrada de log formatada
 type entry struct {
@@ -45,18 +47,31 @@ func (c *chunk) init(depth int) {
 	}
 }
 
+// first obtém o time do primeiro registro nesse chunk
+func (c *chunk) first() time.Time {
+	index := c.write - 1
+	if index < 0 || c.isEmpty() {
+		return epoch
+	}
+	return c.entries[index].time
+}
+
+// last obtém o time do último registro desse chunk
+func (c *chunk) last() time.Time {
+	index := c.write - 1
+	if index < 0 || c.isEmpty() {
+		return epoch
+	}
+	return c.entries[0].time
+}
+
 // ttl obtém a idade do último log inserido neste chunk
 func (c *chunk) ttl() time.Duration {
-	if c.isEmpty() {
+	last := c.last()
+	if last.IsZero() {
 		return 0
 	}
-	index := c.write - 1
-	if index < 0 {
-		// não houve tempo de escrever ainda o primeiro item
-		return 0
-	}
-
-	return time.Since(c.entries[index].time)
+	return time.Since(last)
 }
 
 // full indica que esse chunk está cheio e o flush pode ser realizado

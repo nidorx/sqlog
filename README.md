@@ -8,6 +8,22 @@ Embed log for go apps
 With **SQLog**, you get a lightweight and robust solution for securely logging and storing data, using **SQLite** to ensure data persistence and integrity. It's ideal for developers looking for a practical, cost-effective, and reliable way to monitor their applications, without sacrificing performance.
 
 
+## Features
+
+- a
+- b
+
+## Requirements
+
+- a
+- b
+
+## Usage
+
+- a
+- b
+
+
 ## Golang Tag (Recomendadas)
 
 - **sqlite_fts5** - Full Text Search Engine

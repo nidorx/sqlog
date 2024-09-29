@@ -1,4 +1,4 @@
-module litelog
+module sqlog
 
 go 1.23
 

@@ -1,43 +1,60 @@
-package litelog
+package sqlog
 
 import (
 	"bytes"
 	"context"
+	"io"
 	"log/slog"
 	"sync"
 )
 
-const bbcap = 1 << 16
+const bbcap = 1 << 16 // 65536
+
+type Encoder func(w io.Writer, opts *slog.HandlerOptions) slog.Handler
+
+type HandlerConfig struct {
+	Encoder Encoder // O slog.Handler usado para o encode do json
+	Options *slog.HandlerOptions
+}
 
 // abriga a lógica de escrita do log
 type writer struct {
 	buffer  *bytes.Buffer
-	handler slog.Handler
+	encoder slog.Handler
 }
 
-// @TODO: usar o https://github.com/phuslu/log?
 type handler struct {
 	writers  sync.Pool
-	ingester *ingester
+	ingester *ingesterImpl
 }
 
-func newHandler(ingester *ingester, opts *slog.HandlerOptions) *handler {
-	if opts == nil {
-		opts = &slog.HandlerOptions{
+func newHandler(ingester *ingesterImpl, config *HandlerConfig) *handler {
+	if config == nil {
+		config = &HandlerConfig{}
+	}
+
+	if config.Encoder == nil {
+		config.Encoder = func(w io.Writer, opts *slog.HandlerOptions) slog.Handler {
+			return slog.NewJSONHandler(w, opts)
+		}
+	}
+
+	if config.Options == nil {
+		config.Options = &slog.HandlerOptions{
 			AddSource: false,
 			Level:     slog.LevelInfo,
 		}
 	}
 
-	h := &handler{ingester: ingester}
+	h := &handler{
+		ingester: ingester,
+	}
 
-	// @TODO: Custom writer
+	encoder := config.Encoder
+
 	h.writers.New = func() any {
 		buf := bytes.NewBuffer(make([]byte, 0, 1024))
-		return &writer{
-			buffer:  buf,
-			handler: slog.NewJSONHandler(buf, opts),
-		}
+		return &writer{buffer: buf, encoder: encoder(buf, config.Options)}
 	}
 
 	return h
@@ -48,7 +65,7 @@ func (h *handler) Handle(ctx context.Context, r slog.Record) error {
 	w.buffer.Reset()
 
 	r.Time = r.Time.UTC()
-	if err := w.handler.Handle(ctx, r); err != nil {
+	if err := w.encoder.Handle(ctx, r); err != nil {
 		return err
 	}
 
