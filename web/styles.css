@@ -1,0 +1,584 @@
+/* 
+RED 1: #e72727
+RED 2: #db999a
+BLUE 1: #046eab
+BLUE 2: #b3e5fc
+
+GRAY: #d2d2d2
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+
+html,
+body {
+    font-family: 'Roboto', sans-serif;
+    font-size: 12px;
+}
+
+body.no-scroll {
+    overflow: hidden;
+}
+
+::-webkit-scrollbar {
+    width: 5px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #bec4c4;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+strong {
+    font-weight: bold;
+}
+
+/* #csv {
+    font-family: monospace;
+    font-size: 10px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 100%;
+    height: 400px;
+    max-height: 400px;
+    min-height: 400px;
+    border: 0;
+    border-top: 1px solid #d2d2d2;
+    background: #ccc;
+    margin-top: 50px;
+} */
+
+
+.clear {
+    position: absolute;
+    top: 2px;
+    right: 5px;
+    cursor: pointer;
+}
+
+.textbox {
+    width: 100%;
+}
+
+.wrapper {
+    width: 200px;
+    position: relative;
+}
+
+#date-range{
+    max-width: 240px;
+}
+
+#tab-content {
+    padding: 0 10px;
+    overflow: hidden;
+    overflow-y: scroll;
+    display: block;
+    height: calc(100vh - 194px);
+}
+
+#tab-content>table {
+    display: none;
+    width: 100%
+}
+
+#tab-content>table.active {
+    display: table;
+}
+
+#tab-content>table td {
+    padding: 6px 4px;
+    border-bottom: 1px solid #ccc;
+    background: #fff;
+    transition: background 0.2s;
+    vertical-align: middle;
+}
+
+#tab-content>table tr {
+    cursor: pointer;
+}
+
+#tab-content>table thead tr {
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 5;
+}
+
+#tab-content>table thead td {
+    font-weight: bold;
+}
+
+#tab-content>table thead td.level {
+    width: 40px;
+}
+
+#tab-content>table thead td.date {
+    width: 145px;
+}
+
+#tab-content>table thead td.message {
+    /* message */
+    /* width: 200px; */
+}
+
+#tab-content>table thead td.overview {
+    width: 500px;
+}
+
+#tab-content>table tbody tr td.level {
+    position: relative;
+    padding-left: 7px;
+}
+
+#tab-content>table tbody tr td.level::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 50%;
+    width: 2px;
+    height: 12px;
+    background-color: rgb(249 250 251);
+    margin-bottom: -5px;
+}
+
+#tab-content>table tbody tr:hover td {
+    background-color: rgb(249 250 251);
+}
+
+#tab-content>table tbody tr.debug .level {
+    color: rgb(4 120 87);
+}
+
+#tab-content>table tbody tr.debug:hover td {
+    background-color: rgb(236 253 245);
+}
+
+#tab-content>table tbody tr.debug td.level::before {
+    background-color: rgb(4 120 87);
+}
+
+#tab-content>table tbody tr.info .level {
+    color: rgb(3 105 161);
+}
+
+#tab-content>table tbody tr.info:hover td {
+    background-color: rgb(240 249 255);
+}
+
+#tab-content>table tbody tr.info td.level::before {
+    background-color: rgb(3 105 161);
+}
+
+#tab-content>table tbody tr.warn .level {
+    color: rgb(180 83 9);
+}
+
+#tab-content>table tbody tr.warn:hover td {
+    background-color: rgb(255 251 235);
+}
+
+#tab-content>table tbody tr.warn td.level::before {
+    background-color: rgb(180 83 9);
+}
+
+#tab-content>table tbody tr.error .level {
+    color: rgb(190 18 60);
+}
+
+#tab-content>table tbody tr.error:hover td {
+    background-color: rgb(255 241 242);
+}
+
+#tab-content>table tbody tr.error td.level::before {
+    background-color: rgb(190 18 60);
+}
+
+#tab-content>table#all td:nth-child(3) {
+    display: table-cell;
+}
+
+#chart {
+    top: 0;
+    position: sticky;
+    padding: 10px 0;
+    background: #fff;
+    border-bottom: 2px solid #d2d2d2;
+    user-select: none;
+    z-index: 500;
+}
+
+#chart.hidden {
+    display: none;
+}
+
+#chart .zoom  {
+    position: absolute;
+    right: 0;
+    z-index: 5;
+}
+
+#chart .zoom .btn {
+    --bs-btn-padding-y: 2px;
+    --bs-btn-padding-x: 4px;
+    --bs-btn-font-size: .75rem;
+}
+
+#chart .dates {
+    display: block;
+    width: 100%;
+    bottom: 10px;
+    margin-top: 10px;
+    position: relative;
+    padding-top: 10px;
+}
+
+#chart .dates>div {
+    position: absolute;
+    width: 80px;
+    margin-left: -40px;
+    font-size: 9px;
+    text-align: center;
+}
+
+#chart .dates::before {
+    content: '';
+    position: absolute;
+    top: 0px;
+    left: 10px;
+    width: calc(100% - 20px);
+    height: 1px;
+    background: #bbb;
+}
+
+#chart .dates>div::before {
+    content: '';
+    position: absolute;
+    top: -9px;
+    left: 50%;
+    width: 1px;
+    height: 7px;
+    background: #bbb;
+}
+
+#chart .bars {
+    display: flex;
+    height: 80px;
+    align-items: flex-end;
+    position: relative;
+}
+
+#chart .bars .tick {
+    width: 10px;
+    position: absolute;
+    transition: all 0.2s;
+    height: 100%;
+    display: inline-flex;
+    flex-direction: column;
+    cursor: pointer;
+}
+
+#chart .bars .tick.highlight {
+    background: #d2d2d2;
+}
+
+
+#chart .bars .tick .content {
+    height: var(--height);
+    width: 10px;
+    position: absolute;
+    bottom: 0;
+    background: #b3e5fc;
+    display: flex;
+    flex-direction: column;
+}
+
+#chart .bars .tick.highlight .content {
+    background: #db999a;
+}
+
+/* #chart .bars .tick::before {
+    content: '';
+    background: #b3e5fc;
+    height: var(--height);
+    width: 10px;
+    position: absolute;
+    bottom: 0;
+}
+
+#chart .bars .tick.highlight::before {
+    background: #db999a;
+} */
+
+
+/* 
+
+rgb(249 250 251)
+rgb(236 253 245)
+rgb(240 249 255)
+rgb(255 251 235)
+rgb(255 241 242)
+*/
+
+#chart .bars .tick>div {
+    width: 100%;
+}
+
+#chart .bars .tick .debug {
+    background-color: rgb(110 231 183);
+}
+
+#chart .bars .tick .info {
+    background-color: rgb(147 197 253);
+}
+
+#chart .bars .tick .warn {
+    background-color: rgb(252 211 77);
+}
+
+#chart .bars .tick .error {
+    background-color: rgb(251 113 133);
+}
+
+#chart .bars .tick.hr {
+    display: block;
+    width: calc(100% - 10px);
+    background: transparent;
+    position: absolute;
+    transition: all 0.2s;
+    height: 20px;
+    bottom: calc(50% - 10px);
+    line-height: 20px;
+    overflow: hidden;
+    padding-left: 5px;
+    font-size: 10px;
+}
+
+#chart .bars .tick.hr::before {
+    background: #eee;
+    height: 1px;
+    width: 100%;
+    bottom: 10px;
+    left: 18px;
+}
+
+#chart .needle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 38px;
+    pointer-events: none;
+}
+
+#chart .needle::before {
+    content: '';
+    width: 1px;
+    height: 100%;
+    left: 19px;
+    background: #3D91F5;
+    opacity: 0.5;
+    position: absolute;
+}
+
+#chart .needle .handle {
+    left: 0px;
+    bottom: 0;
+    position: absolute;
+    width: 38px;
+    height: 30px;
+    cursor: col-resize;
+    pointer-events: all;
+}
+
+#chart .needle .handle::before {
+    content: '';
+    left: 11px;
+    bottom: 7px;
+    background: #3D91F5;
+    position: absolute;
+    border-radius: 100%;
+    width: 17px;
+    height: 17px;
+    transition: all 0.2s;
+    scale: 0;
+}
+
+#chart .needle.ui-draggable-dragging .handle::before,
+#chart .needle .handle:hover::before {
+    scale: 1;
+}
+
+
+#tab-content>table tbody tr.highlight td {
+    background: #eee;
+}
+
+#tab-content>table tbody tr:hover td {
+    background: #d2d2d2;
+}
+
+.chart-container {
+    position: relative;
+}
+
+#highlight-date {
+    position: absolute;
+    top: -17px;
+    background: #000;
+    color: #fff;
+    padding: 3px 4px;
+    left: 10px;
+    font-size: 10px;
+    transition: all 0.2s;
+    text-align: center;
+    word-wrap: inherit;
+    white-space: nowrap;
+    z-index: 1000;
+}
+
+#highlight-date::before {
+    content: '';
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid black;
+    bottom: -5px;
+    position: absolute;
+}
+
+#highlight-date.left::before {
+    left: 1px;
+}
+
+#highlight-date.right::before {
+    right: 1px;
+}
+
+#highlight-date.center::before {
+    margin-left: -5px;
+    left: 50%;
+}
+
+#highlight-date.hidden {
+    display: none;
+}
+
+
+#event-attributes {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 60%;
+    z-index: 1500;
+    pointer-events: none;
+}
+
+#event-attributes .overlay {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #000;
+    z-index: 0;
+    opacity: 0.0;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+#event-attributes .container {
+    width: 100%;
+    position: relative;
+    height: 100%;
+    overflow: hidden;
+    overflow-y: auto;
+    z-index: 5;
+    background: #fff;
+    border-left: 1px solid #888;
+    box-shadow: 0px 0px 0px rgba(0, 0, 0, 0.0);
+    opacity: 0.0;
+    transform: translateX(400px);
+    padding: 10px;
+    transition: all 0.2s;
+    max-width: unset;
+}
+
+#event-attributes.active {
+    pointer-events: all;
+}
+
+#event-attributes.active .container {
+    opacity: 1.0;
+    transform: translateX(0px);
+    box-shadow: -10px 0px 10px rgba(0, 0, 0, 0.1);
+}
+
+#event-attributes.active .overlay {
+    opacity: 0.3;
+}
+
+#event-attributes .container .info {
+    font-size: 14px;
+}
+
+#event-attributes .container .json {
+    background: #eee;
+    padding: 5px;
+    font-family: monospace;
+    font-size: 14px;
+    line-height: 20px;
+}
+
+.tag {
+    background-color: #eee;
+    padding: 2px 7px;
+    border-radius: 6px;
+    margin: 4px 5px 0 0;
+    display: inline-block;
+    opacity: 0.5;
+    transition: all 0.2s;
+}
+
+.tag .key {
+    font-weight: bold;
+}
+
+.tag .value {}
+
+#tab-content>table tbody tr:hover .tag {
+    opacity: 1.0;
+}
+
+.daterangepicker .ranges {
+    overflow: hidden;
+    height: 265px;
+    overflow-y: scroll;
+}
+
+.daterangepicker.show-calendar .ranges {
+    margin: 0;
+    padding-top: 8px;
+    border-right: 1px solid #ddd;
+}
+
+.daterangepicker.show-ranges.ltr .drp-calendar.left {
+    border-left: none;
+}
+
+/* 
+RED 1: #e72727
+RED 2: #db999a
+BLUE 1: #046eab
+BLUE 2: #b3e5fc
+
+GRAY: #d2d2d2
+*/
