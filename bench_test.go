@@ -30,5 +30,5 @@ func BenchmarkSQLogSimple(b *testing.B) {
 		logger.Info(msg, "rate", "15", "low", 16, "high", 123.2)
 	}
 
-	l.Close()
+	l.Stop()
 }

@@ -56,11 +56,11 @@ func TestChunk_TTL(t *testing.T) {
 
 func TestChunk_Full(t *testing.T) {
 	chunk := NewChunk(2)
-	assert.False(t, chunk.Full(), "Empty chunk should not be full")
+	assert.False(t, chunk.Ready(), "Empty chunk should not be full")
 
 	chunk.Put(&Entry{Time: time.Now()})
 	chunk.Put(&Entry{Time: time.Now()})
-	assert.True(t, chunk.Full(), "Chunk should be full when it reaches capacity")
+	assert.True(t, chunk.Ready(), "Chunk should be full when it reaches capacity")
 }
 
 func TestChunk_Empty(t *testing.T) {

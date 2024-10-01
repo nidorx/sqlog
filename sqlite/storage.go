@@ -168,7 +168,7 @@ func (s *storage) Flush(chunk *sqlog.Chunk) error {
 
 func (s *storage) Close() error {
 	for _, db := range s.dbs {
-		db.close(true)
+		db.close()
 	}
 	return nil
 }

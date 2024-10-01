@@ -3,19 +3,18 @@ package sqlite
 import (
 	"bytes"
 	"sqlog"
-	"strings"
 )
 
 var (
-	sliteExpBuilder = sqlog.NewExprBuilder(func(expression string) sqlog.ExprBuilder[*SqliteExpr] {
+	ExpBuilderFn = sqlog.NewExprBuilder(func(expression string) (sqlog.ExprBuilder[*Expr], string) {
 		return &SqliteExprBuilder{
 			args: []any{},
 			sql:  bytes.NewBuffer(make([]byte, 0, 512)),
-		}
+		}, expression
 	})
 )
 
-type SqliteExpr struct {
+type Expr struct {
 	Sql  string
 	Args []any
 }
@@ -26,9 +25,9 @@ type SqliteExprBuilder struct {
 	groups []*bytes.Buffer
 }
 
-func (s *SqliteExprBuilder) Build() *SqliteExpr {
+func (s *SqliteExprBuilder) Build() *Expr {
 	// @TODO: write all opened s.groups
-	return &SqliteExpr{
+	return &Expr{
 		Sql:  s.sql.String(),
 		Args: s.args,
 	}
@@ -64,18 +63,18 @@ func (s *SqliteExprBuilder) Text(field, term string, isSequence, isWildcard bool
 	field = "$." + field
 	if isSequence {
 		if isWildcard {
-			s.sql.WriteString("json_extract(e.content, ?) LIKE ?")
-			s.args = append(s.args, field, strings.ReplaceAll(term, "*", "%"))
+			s.sql.WriteString("json_extract(e.content, ?) GLOB ?")
+			s.args = append(s.args, field, term)
 		} else {
 			s.sql.WriteString("json_extract(e.content, ?) = ?")
 			s.args = append(s.args, field, term)
 		}
 	} else {
-		s.sql.WriteString("json_extract(e.content, ?) LIKE ?")
+		s.sql.WriteString("json_extract(e.content, ?) GLOB ?")
 		if isWildcard {
-			s.args = append(s.args, field, strings.ReplaceAll(term, "*", "%"))
+			s.args = append(s.args, field, term)
 		} else {
-			s.args = append(s.args, field, "%"+term+"%")
+			s.args = append(s.args, field, "*"+term+"*")
 		}
 	}
 }

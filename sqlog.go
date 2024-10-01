@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sync"
 )
 
 type Config struct {
@@ -13,7 +14,7 @@ type Config struct {
 }
 
 type Log interface {
-	Close() error
+	Stop()
 	Handler() slog.Handler
 	HttpHandler() http.Handler
 	Ticks(*TicksInput) (*Output, error)
@@ -23,6 +24,7 @@ type Log interface {
 }
 
 type sqlog struct {
+	close    sync.Once
 	config   *Config
 	handler  slog.Handler
 	storage  Storage
@@ -61,10 +63,17 @@ func (l *sqlog) Handler() slog.Handler {
 	return l.handler
 }
 
-func (l *sqlog) Close() error {
-	if slog.Default().Handler() == l.handler {
-		// we will no longer be able to write the log
-		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
-	}
-	return l.ingester.Close()
+func (l *sqlog) Stop() {
+	l.close.Do(func() {
+		if slog.Default().Handler() == l.handler {
+			// we will no longer be able to write the log
+			slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+		}
+		if err := l.ingester.Close(); err != nil {
+			slog.Warn(
+				"[sqlog] error closing",
+				slog.Any("error", err),
+			)
+		}
+	})
 }

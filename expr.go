@@ -22,10 +22,10 @@ type ExprBuilder[E any] interface {
 	NumberIn(field string, values []float64)
 }
 
-type ExprBuilderFactory[E any] func(expression string) ExprBuilder[E]
+type ExprBuilderFactory[E any] func(expression string) (ExprBuilder[E], string)
 
-// NewExprBuilder cria um novo builder de expressão.
-// Permite utilizar o mesmo padrão de filtro em dialetos diversos (Ex. Memory, Sqlite, PostgreSQL)
+// NewExprBuilder creates a new expression builder.
+// Allows the use of the same filter pattern in different dialects (Ex. Memory, Sqlite, PostgreSQL)
 func NewExprBuilder[E any](factory ExprBuilderFactory[E]) func(expression string) (E, error) {
 
 	var parse func(expression string, builder ExprBuilder[E]) error
@@ -47,7 +47,7 @@ func NewExprBuilder[E any](factory ExprBuilderFactory[E]) func(expression string
 			b = qs[i]
 
 			if b == '(' && !s.inArray && !s.inQuote {
-				// faz a compilacao de todos os grupos internos
+				// compiles all internal groups
 				var (
 					inner        = bytes.NewBuffer(make([]byte, 0, 512))
 					parenthesis  = 1 // inner parenthesis
@@ -177,9 +177,9 @@ func NewExprBuilder[E any](factory ExprBuilderFactory[E]) func(expression string
 			return c.(E), nil
 		}
 
-		mapper := factory(expression)
+		mapper, newExpression := factory(expression)
 
-		err = parse(expression, mapper)
+		err = parse(newExpression, mapper)
 		if err != nil {
 			return
 		}

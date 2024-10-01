@@ -40,7 +40,7 @@ func init() {
 	config := &sqlog.Config{
 		Ingester: &sqlog.IngesterConfig{
 			Chunks:    3,
-			BatchSize: 20,
+			ChunkSize: 20,
 		},
 		Storage: storage,
 	}
@@ -54,6 +54,7 @@ func init() {
 }
 
 func main() {
+	defer log.Stop()
 
 	logHttpHandler := log.HttpHandler()
 	staticHttpHandler := getStaticHandler()

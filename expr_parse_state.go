@@ -167,7 +167,7 @@ func (s *exprParseState[E]) addTermSingle() {
 		if isNumeric {
 			s.builder.Number(fieldName, numberCondition, number)
 		} else {
-			s.builder.Text(fieldName, text, false, strings.LastIndexByte(text, '*') >= 0)
+			s.builder.Text(fieldName, text, false, strings.LastIndexByte(text, '*') >= 0 || strings.LastIndexByte(text, '?') >= 0)
 		}
 
 		s.dirty = true
@@ -194,7 +194,7 @@ func (s *exprParseState[E]) addTermSequence() {
 
 		text := s.buf.String()
 
-		s.builder.Text(fieldName, text, true, strings.LastIndexByte(text, '*') >= 0)
+		s.builder.Text(fieldName, text, true, strings.LastIndexByte(text, '*') >= 0 || strings.LastIndexByte(text, '?') >= 0)
 		s.dirty = true
 	}
 	s.buf.Reset()

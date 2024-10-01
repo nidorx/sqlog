@@ -22,6 +22,7 @@ type Chunk struct {
 	cap     int32       // Configured batch size
 	book    int32       // Number of scheduled writes in this chunk
 	write   int32       // Number of writes completed
+	size    int64       // Size of content
 	retries uint        // Number of attempts to persist in the storage
 	locked  atomic.Bool // Indicates if this chunk no longer accepts writes
 	next    *Chunk      // Pointer to the next chunk
@@ -42,6 +43,11 @@ func (c *Chunk) ID() int32 {
 func (c *Chunk) Next() *Chunk {
 	c.Init(1) // ensures the next chunk is initialized
 	return c.next
+}
+
+// Size returns the size of this chunk (in bytes)
+func (c *Chunk) Size() int64 {
+	return c.size
 }
 
 // Init initializes the next chunks
@@ -104,8 +110,8 @@ func (c *Chunk) TTL() time.Duration {
 	return time.Since(last)
 }
 
-// Full indicates if this chunk is full and ready for a flush
-func (c *Chunk) Full() bool {
+// Ready indicates if this chunk is full and ready for a flush
+func (c *Chunk) Ready() bool {
 	return c.write == c.cap || (c.book > 0 && c.write == c.book && c.locked.Load())
 }
 
@@ -151,6 +157,7 @@ func (c *Chunk) Put(e *Entry) (into *Chunk, isFull bool) {
 	// safe write
 	c.entries[index] = e // @TODO: test to ensure it is safe
 	atomic.AddInt32(&c.write, 1)
+	atomic.AddInt64(&c.size, int64(len(e.Content)))
 
 	return c, false
 }

@@ -177,11 +177,11 @@ func (s *storageDb) closeSafe() bool {
 	if s.lastQuerySec() < 2 {
 		return false
 	}
-	return s.close(false)
+	return s.close()
 }
 
 func (s *storageDb) remove() {
-	if s.close(false) && atomic.CompareAndSwapInt32(&s.status, db_closed, db_removing) {
+	if s.close() && atomic.CompareAndSwapInt32(&s.status, db_closed, db_removing) {
 		if err := os.Remove(s.file); err != nil {
 			slog.Warn(
 				"[sqlog] error removing database",
@@ -192,10 +192,10 @@ func (s *storageDb) remove() {
 	}
 }
 
-func (s *storageDb) close(vacuum bool) bool {
+func (s *storageDb) close() bool {
 	if atomic.CompareAndSwapInt32(&s.status, db_open, db_closing) {
 
-		if vacuum {
+		if s.live {
 			if err := s.vacuum(); err != nil {
 				slog.Warn(
 					"[sqlog] error vacuum database",
@@ -229,10 +229,8 @@ func (s *storageDb) vacuum() error {
 	// Use dbstat to find out what fraction of the pages in a database are sequential
 	// if there's a significant degree of fragmentation, then vacuum.
 	// https://www.sqlite.org/dbstat.html
-	// _, err := s.db.Exec("VACUUM")
-	// return err
-
-	return nil
+	_, err := s.db.Exec("VACUUM")
+	return err
 }
 
 // connect realiza a conexão com a base de dados

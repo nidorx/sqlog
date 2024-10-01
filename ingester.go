@@ -18,7 +18,12 @@ type IngesterConfig struct {
 
 	// Quantidade máxima desejada de registros por chunk, antes de
 	// persistir no storage (default|max 900)
-	BatchSize uint16
+	ChunkSize uint16
+
+	// O tamanho máximo em bytes desejado de um chunk.
+	//
+	// Se ultrapassar esse valor será enviado para o storage (default 0)
+	MaxChunkSizeMB int
 
 	// A quantidade máxima de chunks com dados em memória (default 50)
 	//
@@ -29,7 +34,7 @@ type IngesterConfig struct {
 	MaxDirtyChunks int
 
 	// Tenta persistir um chunk quantas vezes em caso de falha (default 3)
-	FlushMaxRetry uint8
+	MaxFlushRetry uint8
 
 	// Se o Chunk atual ficar inativo por esse tempo, envia para
 	// o Storage (default 3 segundos)
@@ -40,9 +45,9 @@ type IngesterConfig struct {
 }
 
 type Ingester struct {
-	flushBlock   *Chunk // chunk que será salvo na base de dados
-	writeBlock   *Chunk // chunk que está recebendo registros de log
-	writeBlockId int32  // Id do chunk que está sendo usado para escrever atualmente
+	flushChunk   *Chunk // chunk que será salvo na base de dados
+	writeChunk   *Chunk // chunk que está recebendo registros de log
+	writeChunkId int32  // Id do chunk que está sendo usado para escrever atualmente
 	config       *IngesterConfig
 	storage      Storage
 	quit         chan struct{}
@@ -66,30 +71,30 @@ func NewIngester(config *IngesterConfig, storage Storage) (*Ingester, error) {
 		config.FlushAfterSec = 3
 	}
 
-	if config.FlushMaxRetry <= 0 {
-		config.FlushMaxRetry = 3
+	if config.MaxFlushRetry <= 0 {
+		config.MaxFlushRetry = 3
 	}
 
-	if config.BatchSize <= 0 {
-		config.BatchSize = 900
+	if config.ChunkSize <= 0 {
+		config.ChunkSize = 900
 	}
 
-	if config.BatchSize > 900 {
-		config.BatchSize = 900
+	if config.ChunkSize > 900 {
+		config.ChunkSize = 900
 	}
 
 	if config.IntervalCheckMs <= 0 {
 		config.IntervalCheckMs = 100
 	}
 
-	root := NewChunk(int32(config.BatchSize))
+	root := NewChunk(int32(config.ChunkSize))
 	root.Init(config.Chunks)
 
 	i := &Ingester{
 		config:       config,
-		writeBlockId: root.id,
-		flushBlock:   root,
-		writeBlock:   root,
+		writeChunkId: root.id,
+		flushChunk:   root,
+		writeChunk:   root,
 		storage:      storage,
 	}
 
@@ -99,10 +104,11 @@ func NewIngester(config *IngesterConfig, storage Storage) (*Ingester, error) {
 }
 
 func (i *Ingester) Ingest(t time.Time, level int8, content []byte) error {
-	block, isFull := i.writeBlock.Put(&Entry{t, level, content})
-	if isFull && atomic.CompareAndSwapInt32(&i.writeBlockId, i.writeBlockId, block.id) {
+	lastWriteId := i.writeChunkId
+	chunk, isFull := i.writeChunk.Put(&Entry{t, level, content})
+	if isFull && atomic.CompareAndSwapInt32(&i.writeChunkId, lastWriteId, chunk.id) {
 		// o chunk está cheio, aponta para o proximo
-		i.writeBlock = block
+		i.writeChunk = chunk
 	}
 	return nil
 }
@@ -120,42 +126,82 @@ func (i *Ingester) routineCheck() {
 
 		case <-tick.C:
 
-			block := i.flushBlock
-
-			if !block.Empty() {
-
-				if block.Full() {
-					if err := i.storage.Flush(block); err != nil {
-						block.retries++
-						slog.Error("[sqlog] error writing chunk", slog.Any("error", err))
-
-						if block.retries > uint(i.config.FlushMaxRetry) {
-							block.Init(i.config.Chunks + 1)
-							i.flushBlock = block.next
-						}
-					} else {
-						block.Init(i.config.Chunks + 1)
-						i.flushBlock = block.next
-					}
-				} else if int(block.TTL().Seconds()) > i.config.FlushAfterSec {
-					// bloqueia a escrita no chunk para que possa ser persistido nos próximos ticks
-					block.Lock()
-					block.Init(i.config.Chunks)
+			for ; i.flushChunk.Ready(); i.flushChunk = i.flushChunk.Next() {
+				chunk := i.flushChunk
+				if chunk.Empty() {
+					break
 				}
 
-				// evita vazamento de memória
-				if i.flushBlock.Depth() > i.config.MaxDirtyChunks {
-					for {
-						if i.flushBlock.Depth() > i.config.MaxDirtyChunks {
-							block.Init(1)
-							i.flushBlock = block.next
+				if chunk.Ready() {
+					if err := i.storage.Flush(chunk); err != nil {
+						chunk.retries++
+						slog.Error("[sqlog] error writing chunk", slog.Any("error", err))
+
+						if chunk.retries > uint(i.config.MaxFlushRetry) {
+							chunk.Init(i.config.Chunks + 1)
 						} else {
 							break
 						}
+					} else {
+						chunk.Init(i.config.Chunks + 1)
 					}
-					i.flushBlock.Init(i.config.Chunks)
+				} else {
+					if int(chunk.TTL().Seconds()) > i.config.FlushAfterSec ||
+						(i.config.MaxChunkSizeMB > 0 && chunk.Size() > int64(i.config.MaxChunkSizeMB)*1000000) {
+						// bloqueia a escrita no chunk para que possa ser persistido na próxima execuçao
+						chunk.Lock()
+						chunk.Init(i.config.Chunks)
+					}
+					break
 				}
 			}
+
+			// limita consumo de memória
+			if !i.flushChunk.Empty() && i.flushChunk.Depth() > i.config.MaxDirtyChunks {
+				for {
+					if i.flushChunk.Depth() > i.config.MaxDirtyChunks {
+						i.flushChunk = i.flushChunk.Next()
+					} else {
+						break
+					}
+				}
+				i.flushChunk.Init(i.config.Chunks)
+			}
+
+			// if !block.Empty() {
+
+			// 	if block.Ready() {
+			// 		if err := i.storage.Flush(block); err != nil {
+			// 			block.retries++
+			// 			slog.Error("[sqlog] error writing chunk", slog.Any("error", err))
+
+			// 			if block.retries > uint(i.config.FlushMaxRetry) {
+			// 				block.Init(i.config.Chunks + 1)
+			// 				i.flushBlock = block.next
+			// 			}
+			// 		} else {
+			// 			block.Init(i.config.Chunks + 1)
+			// 			i.flushBlock = block.next
+			// 		}
+			// 	} else if int(block.TTL().Seconds()) > i.config.FlushAfterSec {
+			// 		// bloqueia a escrita no chunk para que possa ser persistido nos próximos ticks
+			// 		block.Lock()
+			// 		block.Init(i.config.Chunks)
+			// 	}
+
+			// 	// evita vazamento de memória
+			// 	if i.flushBlock.Depth() > i.config.MaxDirtyChunks {
+			// 		for {
+			// 			if i.flushBlock.Depth() > i.config.MaxDirtyChunks {
+			// 				block.Init(1)
+			// 				i.flushBlock = block.next
+			// 			} else {
+			// 				break
+			// 			}
+			// 		}
+			// 		i.flushBlock.Init(i.config.Chunks)
+			// 	}
+			// }
 			tick.Reset(d)
 
 		case <-i.quit:
@@ -163,7 +209,7 @@ func (i *Ingester) routineCheck() {
 
 			tick.Stop()
 
-			chunk := i.flushBlock
+			chunk := i.flushChunk
 			chunk.Lock()
 
 			for {
@@ -171,10 +217,10 @@ func (i *Ingester) routineCheck() {
 					break
 				}
 
-				if chunk.Full() {
+				if chunk.Ready() {
 					// write
 					i.storage.Flush(chunk)
-					chunk = chunk.next
+					chunk = chunk.Next()
 					chunk.Lock()
 				} else {
 					// aguarda para persistir esse chunk

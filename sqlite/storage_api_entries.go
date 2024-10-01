@@ -86,7 +86,7 @@ func (s *storage) Entries(input *sqlog.EntriesInput) (*sqlog.Output, error) {
 	}
 
 	if expr = strings.TrimSpace(expr); expr != "" {
-		if compiled, err := sliteExpBuilder(expr); err != nil {
+		if compiled, err := ExpBuilderFn(expr); err != nil {
 			return nil, err
 		} else if compiled.Sql != "" {
 			buf.WriteString(" AND (")

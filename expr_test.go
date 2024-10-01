@@ -7,8 +7,8 @@ import (
 )
 
 var (
-	testExprBuilderFn = NewExprBuilder(func(expression string) ExprBuilder[[]any] {
-		return &testExprBuilder{parts: []any{}}
+	testExprBuilderFn = NewExprBuilder(func(expression string) (ExprBuilder[[]any], string) {
+		return &testExprBuilder{parts: []any{}}, expression
 	})
 )
 
@@ -72,7 +72,7 @@ type testExprData struct {
 	parts []any
 }
 
-func Test_SqliteExprMapperBasic(t *testing.T) {
+func Test_ExprBasic(t *testing.T) {
 	testCases := []testExprData{
 		{
 			"hello",
@@ -132,12 +132,12 @@ func Test_SqliteExprMapperBasic(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runSqliteExprMapperTest(t, tt)
+		runExprTest(t, tt)
 	}
 }
 
 // Numerical values
-func Test_SqliteExprMapperNumerical(t *testing.T) {
+func Test_ExprNumerical(t *testing.T) {
 	testCases := []testExprData{
 		{
 			`field:99`,
@@ -161,11 +161,11 @@ func Test_SqliteExprMapperNumerical(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runSqliteExprMapperTest(t, tt)
+		runExprTest(t, tt)
 	}
 }
 
-func Test_SqliteExprMapperArray(t *testing.T) {
+func Test_ExprArray(t *testing.T) {
 	testCases := []testExprData{
 		{
 			`[hello world]`,
@@ -197,12 +197,12 @@ func Test_SqliteExprMapperArray(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runSqliteExprMapperTest(t, tt)
+		runExprTest(t, tt)
 	}
 }
 
 // Boolean Operators
-func Test_SqliteExprMapperBoolean(t *testing.T) {
+func Test_ExprBoolean(t *testing.T) {
 	testCases := []testExprData{
 		{
 			"hello AND world",
@@ -253,11 +253,11 @@ func Test_SqliteExprMapperBoolean(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runSqliteExprMapperTest(t, tt)
+		runExprTest(t, tt)
 	}
 }
 
-func Test_SqliteExprMapperEscape(t *testing.T) {
+func Test_ExprEscape(t *testing.T) {
 	testCases := []testExprData{
 		{
 			`hell\"o`,
@@ -309,11 +309,11 @@ func Test_SqliteExprMapperEscape(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runSqliteExprMapperTest(t, tt)
+		runExprTest(t, tt)
 	}
 }
 
-func Test_SqliteExprMapperIncomplete(t *testing.T) {
+func Test_ExprIncomplete(t *testing.T) {
 	testCases := []testExprData{
 		{
 			`"hello \" world`,
@@ -351,19 +351,12 @@ func Test_SqliteExprMapperIncomplete(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runSqliteExprMapperTest(t, tt)
+		runExprTest(t, tt)
 	}
 }
 
-func runSqliteExprMapperTest(t *testing.T, tt testExprData) {
+func runExprTest(t *testing.T, tt testExprData) {
 	compiled, err := testExprBuilderFn(tt.expr)
 	assert.NoError(t, err)
 	assert.Equal(t, tt.parts, compiled, "exp=%s", tt.expr)
 }
-
-// func Test_SqliteExprMapperSingle(t *testing.T) {
-// 	runSqliteExprMapperTest(t, testSqliteExprData{
-// 		`(hell\"o AND \"world)`,
-// 		[]any{"msg", `%hell"o%`, "msg", `%"world%`},
-// 	})
-// }
