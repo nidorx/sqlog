@@ -82,7 +82,7 @@ func NewIngester(config *IngesterConfig, storage Storage) (*Ingester, error) {
 		config.IntervalCheckMs = 100
 	}
 
-	root := &Chunk{cap: int32(config.BatchSize)}
+	root := NewChunk(int32(config.BatchSize))
 	root.Init(config.Chunks)
 
 	i := &Ingester{
