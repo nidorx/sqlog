@@ -1,10 +1,10 @@
-package sqlog
+package sqlite
 
 import (
 	"time"
 )
 
-func (s *storageImpl) routineWalCheckpoint() {
+func (s *storage) routineWalCheckpoint() {
 	d := time.Duration(s.config.IntervalWalCheckpointSec) * time.Second
 	tick := time.NewTicker(d)
 	defer tick.Stop()

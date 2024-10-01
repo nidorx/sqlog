@@ -1,7 +1,8 @@
-package sqlog
+package sqlite
 
 import (
 	"sort"
+	"sqlog"
 	"sync/atomic"
 	"time"
 )
@@ -16,15 +17,15 @@ const (
 type dbTask struct {
 	db       *storageDb
 	state    int32 // 0=created, 1=process, 2=finished, 3=canceled
-	output   *Output
-	callback func(*storageDb, *Output) error
+	output   *sqlog.Output
+	callback func(*storageDb, *sqlog.Output) error
 }
 
 // schedule agenda a execução do callback para ser executado em cada db da lista
-func (s *storageImpl) schedule(dbs []*storageDb, callback func(*storageDb, *Output) error) (taskIds []int32) {
+func (s *storage) schedule(dbs []*storageDb, callback func(*storageDb, *sqlog.Output) error) (taskIds []int32) {
 	for _, db := range dbs {
 		id := atomic.AddInt32(&s.taskIdSeq, 1)
-		task := &dbTask{callback: callback}
+		task := &dbTask{callback: callback, output: &sqlog.Output{}}
 		s.taskMap.Store(id, task)
 		db.schedule(id, task)
 		taskIds = append(taskIds, id)
@@ -33,21 +34,21 @@ func (s *storageImpl) schedule(dbs []*storageDb, callback func(*storageDb, *Outp
 }
 
 // result obtém o resultado de um processamento asíncrono
-func (s *storageImpl) result(taskId int32) *Output {
+func (s *storage) result(taskId int32) *sqlog.Output {
 	if v, loaded := s.taskMap.Load(taskId); loaded {
 		task := v.(*dbTask)
 		if task.state == task_finished || task.state == task_canceled {
 			s.taskMap.Delete(taskId)
 			return task.output
 		} else {
-			return &Output{Scheduled: true, TaskIds: []int32{taskId}}
+			return &sqlog.Output{Scheduled: true, TaskIds: []int32{taskId}}
 		}
 	}
 	return nil
 }
 
 // cancel cancela um processamento asíncrono
-func (s *storageImpl) cancel(taskId int32) {
+func (s *storage) cancel(taskId int32) {
 	if v, loaded := s.taskMap.Load(taskId); loaded {
 		task := v.(*dbTask)
 		atomic.StoreInt32(&task.state, task_canceled)
@@ -57,7 +58,7 @@ func (s *storageImpl) cancel(taskId int32) {
 }
 
 // routineScheduledTasks gerenciamentoo de tarefas agendadas no storage
-func (s *storageImpl) routineScheduledTasks() {
+func (s *storage) routineScheduledTasks() {
 	defer close(s.shutdown)
 
 	d := time.Duration(s.config.IntervalScheduledTasksMs)

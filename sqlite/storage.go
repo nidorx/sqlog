@@ -1,7 +1,8 @@
-package sqlog
+package sqlite
 
 import (
 	"errors"
+	"sqlog"
 	"strings"
 	"sync"
 	"time"
@@ -9,7 +10,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-type StorageConfig struct {
+type Config struct {
 	Dir           string            // Database folder (default "./logs")
 	Prefix        string            // Database name prefix (default "sqlog")
 	SQLiteOptions map[string]string // https://github.com/mattn/go-sqlite3?tab=readme-ov-file#connection-string
@@ -47,25 +48,25 @@ type StorageConfig struct {
 	IntervalWalCheckpointSec int32
 }
 
-// storageImpl connection to a sqlite database
+// storage connection to a sqlite database
 // https://ferrous-systems.com/blog/lock-free-ring-buffer/
-type storageImpl struct {
-	Storage
-	StorageWithApi
+type storage struct {
+	sqlog.Storage
+	sqlog.StorageWithApi
 	mu        sync.Mutex
-	dbs       []*storageDb   // todos os banco de dados desse storage
-	liveDbs   []*storageDb   // os banco de dados que ainda estão salvando dados
-	config    *StorageConfig //
-	taskIdSeq int32          // last task id
-	taskMap   sync.Map       // saída da execução
+	dbs       []*storageDb // todos os banco de dados desse storage
+	liveDbs   []*storageDb // os banco de dados que ainda estão salvando dados
+	config    *Config      //
+	taskIdSeq int32        // last task id
+	taskMap   sync.Map     // saída da execução
 	quit      chan struct{}
 	shutdown  chan struct{}
 }
 
-func newStorage(config *StorageConfig) (*storageImpl, error) {
+func New(config *Config) (*storage, error) {
 
 	if config == nil {
-		config = &StorageConfig{}
+		config = &Config{}
 	}
 
 	if len(config.SQLiteOptions) == 0 {
@@ -123,7 +124,7 @@ func newStorage(config *StorageConfig) (*storageImpl, error) {
 	}
 	live.live = true
 
-	s := &storageImpl{
+	s := &storage{
 		config:  config,
 		dbs:     dbs,
 		liveDbs: []*storageDb{live},
@@ -140,7 +141,7 @@ func newStorage(config *StorageConfig) (*storageImpl, error) {
 }
 
 // Flush saves the chunk records to the current live database.
-func (s *storageImpl) Flush(chunk *Chunk) error {
+func (s *storage) Flush(chunk *sqlog.Chunk) error {
 
 	var (
 		db         *storageDb
@@ -165,7 +166,7 @@ func (s *storageImpl) Flush(chunk *Chunk) error {
 	return db.flush(chunk)
 }
 
-func (s *storageImpl) Close() error {
+func (s *storage) Close() error {
 	for _, db := range s.dbs {
 		db.close(true)
 	}

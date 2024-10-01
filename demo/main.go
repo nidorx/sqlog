@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"sqlog"
+	"sqlog/sqlite"
 	"strings"
 )
 
@@ -16,27 +17,34 @@ var (
 
 	log sqlog.Log
 
-	config = &sqlog.Config{
-		// Storage: &sqlog.StorageConfig{
-		// 	Dir:             "logs",
-		// 	Prefix:          "demo",
-		// 	MaxFilesizeMB:   1,
-		// 	TotalSizeCapMB:  5,
-		// 	MaxOpenedDB:     2,
-		// 	MaxRunningTasks: 5,
-		// 	CloseIdleSec:    10,
-		// },
-		Ingester: &sqlog.IngesterConfig{
-			Chunks:    3,
-			BatchSize: 20,
-		},
-	}
-
 	//go:embed public/*
 	webFiles embed.FS
 )
 
 func init() {
+
+	// SQLite storage
+	storage, err := sqlite.New(&sqlite.Config{
+		Dir:             "logs",
+		Prefix:          "demo",
+		MaxFilesizeMB:   1,
+		TotalSizeCapMB:  5,
+		MaxOpenedDB:     2,
+		MaxRunningTasks: 5,
+		CloseIdleSec:    10,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	config := &sqlog.Config{
+		Ingester: &sqlog.IngesterConfig{
+			Chunks:    3,
+			BatchSize: 20,
+		},
+		Storage: storage,
+	}
+
 	if l, err := sqlog.New(config); err != nil {
 		panic(err)
 	} else {

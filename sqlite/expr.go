@@ -1,26 +1,52 @@
-package sqlog
+package sqlite
 
 import (
 	"bytes"
+	"sqlog"
 	"strings"
 )
 
-type SqliteExprMapper struct {
+var (
+	sliteExpBuilder = sqlog.NewExprBuilder(&SqliteExprBuilderFactory{})
+)
+
+type SqliteExpr struct {
+	Sql  string
+	Args []any
+}
+
+type SqliteExprBuilderFactory struct{}
+
+func (f *SqliteExprBuilderFactory) Init(expression string) sqlog.ExprBuilder[*SqliteExpr] {
+	return &SqliteExprBuilder{
+		args: []any{},
+		sql:  bytes.NewBuffer(make([]byte, 0, 512)),
+	}
+}
+
+type SqliteExprBuilder struct {
 	args   []any
-	sql    *bytes.Buffer // final query
+	sql    *bytes.Buffer
 	groups []*bytes.Buffer
 }
 
-func (s *SqliteExprMapper) Sql() string {
-	return s.sql.String()
+func (s *SqliteExprBuilder) Build() *SqliteExpr {
+	// @TODO: write all opened s.groups
+	return &SqliteExpr{
+		Sql:  s.sql.String(),
+		Args: s.args,
+	}
 }
 
-func (s *SqliteExprMapper) Args() []any {
-	return s.args
+func (s *SqliteExprBuilder) GroupStart() {
+	s.sql.WriteByte('(')
+	s.groups = append(s.groups, s.sql)
+	s.sql = bytes.NewBuffer(make([]byte, 0, 512))
 }
 
-func (s *SqliteExprMapper) GroupEnd() {
-	if len(s.groups) > 0 { // sempre espera que sim
+func (s *SqliteExprBuilder) GroupEnd() {
+	if len(s.groups) > 0 {
+		// sempre espera que sim
 		last := len(s.groups) - 1
 		parent := s.groups[last]
 		s.groups = s.groups[:last]
@@ -30,13 +56,7 @@ func (s *SqliteExprMapper) GroupEnd() {
 	s.sql.WriteByte(')')
 }
 
-func (s *SqliteExprMapper) GroupStart() {
-	s.sql.WriteByte('(')
-	s.groups = append(s.groups, s.sql)
-	s.sql = bytes.NewBuffer(make([]byte, 0, 512))
-}
-
-func (s *SqliteExprMapper) Operator(op string) {
+func (s *SqliteExprBuilder) Operator(op string) {
 	if s.sql.Len() > 0 {
 		s.sql.WriteByte(' ')
 		s.sql.WriteString(op) // AND|OR
@@ -44,10 +64,10 @@ func (s *SqliteExprMapper) Operator(op string) {
 	}
 }
 
-func (s *SqliteExprMapper) Term(field, term string, sequence, regex bool) {
+func (s *SqliteExprBuilder) Text(field, term string, isSequence, isWildcard bool) {
 	field = "$." + field
-	if sequence {
-		if regex {
+	if isSequence {
+		if isWildcard {
 			s.sql.WriteString("json_extract(e.content, ?) LIKE ?")
 			s.args = append(s.args, field, strings.ReplaceAll(term, "*", "%"))
 		} else {
@@ -56,7 +76,7 @@ func (s *SqliteExprMapper) Term(field, term string, sequence, regex bool) {
 		}
 	} else {
 		s.sql.WriteString("json_extract(e.content, ?) LIKE ?")
-		if regex {
+		if isWildcard {
 			s.args = append(s.args, field, strings.ReplaceAll(term, "*", "%"))
 		} else {
 			s.args = append(s.args, field, "%"+term+"%")
@@ -64,7 +84,7 @@ func (s *SqliteExprMapper) Term(field, term string, sequence, regex bool) {
 	}
 }
 
-func (s *SqliteExprMapper) In(field string, values []string) {
+func (s *SqliteExprBuilder) TextIn(field string, values []string) {
 	s.args = append(s.args, "$."+field)
 	s.sql.WriteString("json_extract(e.content, ?) IN (")
 	for i, v := range values {
@@ -77,19 +97,19 @@ func (s *SqliteExprMapper) In(field string, values []string) {
 	s.sql.WriteByte(')')
 }
 
-func (s *SqliteExprMapper) Number(field, condition string, value float64) {
+func (s *SqliteExprBuilder) Number(field, condition string, value float64) {
 	s.sql.WriteString("CAST(json_extract(e.content, ?) AS NUMERIC) ")
 	s.sql.WriteString(condition)
 	s.sql.WriteString(" ? ")
 	s.args = append(s.args, "$."+field, value)
 }
 
-func (s *SqliteExprMapper) NumberBetween(field string, x, y float64) {
+func (s *SqliteExprBuilder) Between(field string, x, y float64) {
 	s.sql.WriteString("CAST(json_extract(e.content, ?) AS NUMERIC) BETWEEN ? AND ?")
 	s.args = append(s.args, "$."+field, x, y)
 }
 
-func (s *SqliteExprMapper) NumberIn(field string, values []float64) {
+func (s *SqliteExprBuilder) NumberIn(field string, values []float64) {
 	s.sql.WriteString("CAST(json_extract(e.content, ?) AS NUMERIC) IN (")
 	s.args = append(s.args, "$."+field)
 	for i, v := range values {

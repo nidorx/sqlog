@@ -1,11 +1,11 @@
-package sqlog
+package sqlite
 
 import (
 	"log/slog"
 	"time"
 )
 
-func (s *storageImpl) routineSizeCheck() {
+func (s *storage) routineSizeCheck() {
 	d := time.Duration(s.config.IntervalSizeCheckSec) * time.Second
 	tick := time.NewTicker(d)
 	defer tick.Stop()

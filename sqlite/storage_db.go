@@ -1,4 +1,4 @@
-package sqlog
+package sqlite
 
 import (
 	"bytes"
@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"sqlog"
 	"strconv"
 	"strings"
 	"sync"
@@ -55,7 +56,6 @@ const (
 )
 
 type storageDb struct {
-	mu             sync.Mutex
 	file           string
 	status         int32
 	epochStart     int64
@@ -300,7 +300,7 @@ func (s *storageDb) query(sql string, args []any) (*sql.Stmt, *sql.Rows, error) 
 }
 
 // flush saves the chunk records to this database.
-func (s *storageDb) flush(chunk *Chunk) error {
+func (s *storageDb) flush(chunk *sqlog.Chunk) error {
 	values := []any{}
 
 	sql := bytes.NewBuffer(make([]byte, 0, 1952))
@@ -316,9 +316,9 @@ func (s *storageDb) flush(chunk *Chunk) error {
 			sql.WriteByte(',')
 		}
 		sql.Write(sqlInsertValues)
-		epoch := e.time.Unix()
+		epoch := e.Time.Unix()
 		epochEnd = max(epochEnd, epoch)
-		values = append(values, epoch, e.time.Nanosecond(), e.level, e.content)
+		values = append(values, epoch, e.Time.Nanosecond(), e.Level, e.Content)
 	}
 
 	if len(values) == 0 {

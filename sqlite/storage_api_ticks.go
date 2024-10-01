@@ -1,8 +1,9 @@
-package sqlog
+package sqlite
 
 import (
 	"bytes"
 	"fmt"
+	"sqlog"
 	"strings"
 	"time"
 )
@@ -30,7 +31,7 @@ var (
 )
 
 // listTicks obtém as informações sobre todas as séries no intervalo
-func (s *storageImpl) Ticks(input *TicksInput) (*Output, error) {
+func (s *storage) Ticks(input *sqlog.TicksInput) (*sqlog.Output, error) {
 
 	var (
 		levels      map[string]bool
@@ -105,7 +106,7 @@ func (s *storageImpl) Ticks(input *TicksInput) (*Output, error) {
 	}
 
 	if expr = strings.TrimSpace(expr); expr != "" {
-		if compiled, err := Compile(expr, nil); err != nil {
+		if compiled, err := sliteExpBuilder(expr); err != nil {
 			return nil, err
 		} else if compiled.Sql != "" {
 			buf.WriteString(clause)
@@ -121,8 +122,8 @@ func (s *storageImpl) Ticks(input *TicksInput) (*Output, error) {
 		epochStart  = epochEnd - int64((intervalSec * maxResult))
 		dbs         []*storageDb
 		closedDbs   []*storageDb
-		list        []*Tick
-		tickByIndex = map[int]*Tick{}
+		list        []*sqlog.Tick
+		tickByIndex = map[int]*sqlog.Tick{}
 	)
 
 	fmt.Printf("[sqlog] Ticks\nSQL: %s\n\nARG: %v\n", sql, args) // debug
@@ -159,14 +160,14 @@ func (s *storageImpl) Ticks(input *TicksInput) (*Output, error) {
 		}
 	}
 
-	out := &Output{
+	out := &sqlog.Output{
 		Ticks: list,
 	}
 
 	if len(closedDbs) > 0 {
 		// schedule more result
 		out.Scheduled = true
-		out.TaskIds = s.schedule(closedDbs, func(db *storageDb, o *Output) error {
+		out.TaskIds = s.schedule(closedDbs, func(db *storageDb, o *sqlog.Output) error {
 			if list, err := listTicks(db, sql, args); err != nil {
 				return err
 			} else {
@@ -179,8 +180,8 @@ func (s *storageImpl) Ticks(input *TicksInput) (*Output, error) {
 	return out, nil
 }
 
-func listTicks(db *storageDb, sql string, args []any) ([]*Tick, error) {
-	var list []*Tick
+func listTicks(db *storageDb, sql string, args []any) ([]*sqlog.Tick, error) {
+	var list []*sqlog.Tick
 
 	stm, rows, err := db.query(sql, args)
 	if err != nil {
@@ -190,7 +191,7 @@ func listTicks(db *storageDb, sql string, args []any) ([]*Tick, error) {
 	defer rows.Close()
 
 	for rows.Next() {
-		t := &Tick{}
+		t := &sqlog.Tick{}
 		if err = rows.Scan(&t.Index, &t.Start, &t.End, &t.Count, &t.Debug, &t.Info, &t.Warn, &t.Error); err != nil {
 			return nil, err
 		}

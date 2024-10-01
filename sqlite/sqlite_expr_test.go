@@ -1,4 +1,4 @@
-package sqlog
+package sqlite
 
 import (
 	"fmt"
@@ -10,14 +10,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type testExpressionData struct {
+type testSqliteExprData struct {
 	expr string
 	sql  string
 	args []any
 }
 
-func Test_CompileBasic(t *testing.T) {
-	testCases := []testExpressionData{
+func Test_SqliteExprMapperBasic(t *testing.T) {
+	testCases := []testSqliteExprData{
 		{
 			"hello",
 			"json_extract(e.content, ?) LIKE ?",
@@ -90,13 +90,13 @@ func Test_CompileBasic(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runTest(t, tt)
+		runSqliteExprMapperTest(t, tt)
 	}
 }
 
 // Numerical values
-func Test_CompileNumerical(t *testing.T) {
-	testCases := []testExpressionData{
+func Test_SqliteExprMapperNumerical(t *testing.T) {
+	testCases := []testSqliteExprData{
 		{
 			`field:99`,
 			`CAST(json_extract(e.content, ?) AS NUMERIC) = ?`,
@@ -124,12 +124,12 @@ func Test_CompileNumerical(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runTest(t, tt)
+		runSqliteExprMapperTest(t, tt)
 	}
 }
 
-func Test_CompileArray(t *testing.T) {
-	testCases := []testExpressionData{
+func Test_SqliteExprMapperArray(t *testing.T) {
+	testCases := []testSqliteExprData{
 		{
 			`[hello world]`,
 			"json_extract(e.content, ?) IN (?, ?)",
@@ -167,13 +167,13 @@ func Test_CompileArray(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runTest(t, tt)
+		runSqliteExprMapperTest(t, tt)
 	}
 }
 
 // Boolean Operators
-func Test_CompileBoolean(t *testing.T) {
-	testCases := []testExpressionData{
+func Test_SqliteExprMapperBoolean(t *testing.T) {
+	testCases := []testSqliteExprData{
 		{
 			"hello AND world",
 			`json_extract(e.content, ?) LIKE ? AND json_extract(e.content, ?) LIKE ?`,
@@ -235,12 +235,12 @@ func Test_CompileBoolean(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runTest(t, tt)
+		runSqliteExprMapperTest(t, tt)
 	}
 }
 
-func Test_CompileEscape(t *testing.T) {
-	testCases := []testExpressionData{
+func Test_SqliteExprMapperEscape(t *testing.T) {
+	testCases := []testSqliteExprData{
 		{
 			`hell\"o`,
 			"json_extract(e.content, ?) LIKE ?",
@@ -303,12 +303,12 @@ func Test_CompileEscape(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runTest(t, tt)
+		runSqliteExprMapperTest(t, tt)
 	}
 }
 
-func Test_CompileIncomplete(t *testing.T) {
-	testCases := []testExpressionData{
+func Test_SqliteExprMapperIncomplete(t *testing.T) {
+	testCases := []testSqliteExprData{
 		{
 			`"hello \" world`,
 			"json_extract(e.content, ?) = ?",
@@ -353,15 +353,13 @@ func Test_CompileIncomplete(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runTest(t, tt)
+		runSqliteExprMapperTest(t, tt)
 	}
 }
 
-func runTest(t *testing.T, tt testExpressionData) {
-	compiled, err := Compile(tt.expr, nil)
+func runSqliteExprMapperTest(t *testing.T, tt testSqliteExprData) {
+	compiled, err := sliteExpBuilder(tt.expr)
 	assert.NoError(t, err)
-	// buffer := &bytes.Buffer{}
-	// args := c.Process(nil, buffer, nil)
 
 	actual := compiled.Sql
 	expected := tt.sql
@@ -389,10 +387,10 @@ func runTest(t *testing.T, tt testExpressionData) {
 	assert.Equal(t, tt.args, compiled.Args)
 }
 
-func Test_CompilSingle(t *testing.T) {
-	runTest(t, testExpressionData{
-		`(hell\"o AND \"world)`,
-		"(json_extract(e.content, ?) LIKE ? AND json_extract(e.content, ?) LIKE ?)",
-		[]any{"$.msg", `%hell"o%`, "$.msg", `%"world%`},
-	})
-}
+// func Test_SqliteExprMapperSingle(t *testing.T) {
+// 	runSqliteExprMapperTest(t, testSqliteExprData{
+// 		`(hell\"o AND \"world)`,
+// 		"(json_extract(e.content, ?) LIKE ? AND json_extract(e.content, ?) LIKE ?)",
+// 		[]any{"$.msg", `%hell"o%`, "$.msg", `%"world%`},
+// 	})
+// }

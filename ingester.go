@@ -144,9 +144,9 @@ func (i *Ingester) routineCheck() {
 				}
 
 				// evita vazamento de memória
-				if i.flushBlock.depth() > i.config.MaxDirtyChunks {
+				if i.flushBlock.Depth() > i.config.MaxDirtyChunks {
 					for {
-						if i.flushBlock.depth() > i.config.MaxDirtyChunks {
+						if i.flushBlock.Depth() > i.config.MaxDirtyChunks {
 							block.Init(1)
 							i.flushBlock = block.next
 						} else {
@@ -168,7 +168,7 @@ func (i *Ingester) routineCheck() {
 
 			for {
 				if chunk.Empty() {
-					return
+					break
 				}
 
 				if chunk.Full() {
@@ -183,8 +183,13 @@ func (i *Ingester) routineCheck() {
 			}
 
 			if err := i.storage.Close(); err != nil {
-
+				slog.Warn(
+					"[sqlog] error closing storage",
+					slog.Any("error", err),
+				)
 			}
+
+			return
 		}
 	}
 }

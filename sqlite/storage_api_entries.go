@@ -1,9 +1,10 @@
-package sqlog
+package sqlite
 
 import (
 	"bytes"
 	"fmt"
 	"sort"
+	"sqlog"
 	"strings"
 	"time"
 )
@@ -18,7 +19,7 @@ var (
 // listEntries obtém uma página de resultados (seek method or keyset pagination).
 // A ordenação é inversa, o resultado mais antigo vem primeiro
 // @TODO: Adicionar epochMax
-func (s *storageImpl) Entries(input *EntriesInput) (*Output, error) {
+func (s *storage) Entries(input *sqlog.EntriesInput) (*sqlog.Output, error) {
 
 	var (
 		levels     map[string]bool
@@ -85,7 +86,7 @@ func (s *storageImpl) Entries(input *EntriesInput) (*Output, error) {
 	}
 
 	if expr = strings.TrimSpace(expr); expr != "" {
-		if compiled, err := Compile(expr, nil); err != nil {
+		if compiled, err := sliteExpBuilder(expr); err != nil {
 			return nil, err
 		} else if compiled.Sql != "" {
 			buf.WriteString(" AND (")
@@ -140,7 +141,7 @@ func (s *storageImpl) Entries(input *EntriesInput) (*Output, error) {
 		})
 	}
 
-	out := &Output{}
+	out := &sqlog.Output{}
 
 	for _, db := range dbs {
 		if db.isOpen() {

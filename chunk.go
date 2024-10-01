@@ -10,9 +10,9 @@ var epoch = time.Time{}.UTC()
 
 // Entry representa uma entrada de log formatada
 type Entry struct {
-	time    time.Time
-	level   int8
-	content []byte
+	Time    time.Time
+	Level   int8
+	Content []byte
 }
 
 // Chunk abriga dados de até 900 logs que serão persistidos na base
@@ -28,15 +28,15 @@ type Chunk struct {
 	entries [900]*Entry // Os registros neste chunk
 }
 
-// depth obtém a quantidade de chunks não vazios
-func (c *Chunk) depth() int {
+// Depth obtém a quantidade de chunks não vazios
+func (c *Chunk) Depth() int {
 	if c.Empty() {
 		return 0
 	}
 	if c.next == nil {
 		return 1
 	}
-	return 1 + c.next.depth()
+	return 1 + c.next.Depth()
 }
 
 // Init inicializa os próximos chunks
@@ -65,7 +65,7 @@ func (c *Chunk) First() time.Time {
 	if index < 0 || c.Empty() {
 		return epoch
 	}
-	return c.entries[index].time
+	return c.entries[index].Time
 }
 
 // Last obtém o time do último registro desse chunk
@@ -74,7 +74,7 @@ func (c *Chunk) Last() time.Time {
 	if index < 0 || c.Empty() {
 		return epoch
 	}
-	return c.entries[0].time
+	return c.entries[0].Time
 }
 
 // TTL obtém a idade do último log inserido neste chunk
