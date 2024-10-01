@@ -12,16 +12,32 @@ import (
 )
 
 var (
+	dev = true
+
 	log sqlog.Log
 
-	dev = true
+	config = &sqlog.Config{
+		// Storage: &sqlog.StorageConfig{
+		// 	Dir:             "logs",
+		// 	Prefix:          "demo",
+		// 	MaxFilesizeMB:   1,
+		// 	TotalSizeCapMB:  5,
+		// 	MaxOpenedDB:     2,
+		// 	MaxRunningTasks: 5,
+		// 	CloseIdleSec:    10,
+		// },
+		Ingester: &sqlog.IngesterConfig{
+			Chunks:    3,
+			BatchSize: 20,
+		},
+	}
 
 	//go:embed public/*
 	webFiles embed.FS
 )
 
 func init() {
-	if l, err := sqlog.New(&sqlog.Config{}); err != nil {
+	if l, err := sqlog.New(config); err != nil {
 		panic(err)
 	} else {
 		log = l

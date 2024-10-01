@@ -27,6 +27,7 @@
     let levels = new Set(['debug', 'info', 'warn', 'error']);
 
     let $bars;
+    let $count;
     let $chart;
     let $container;
     let $content;
@@ -35,6 +36,7 @@
     $(function () {
         $chart = $("#chart");
         $bars = $(".bars", $chart);
+        $count = $('> .count', $chart);
         $needle = $(".needle", $chart);
         $container = $("#tab-content");
         $content = $("> table", $container);
@@ -114,30 +116,6 @@
             updateTick();
         }
 
-        const ranges = {
-            'Past 5 Minutes': [moment().subtract(5, 'minutes'), moment()],
-            'Past 15 Minutes': [moment().subtract(15, 'minutes'), moment()],
-            'Past 30 Minutes': [moment().subtract(30, 'minutes'), moment()],
-            'Past 1 Hour': [moment().subtract(1, 'hours'), moment()],
-            'Past 4 Hours': [moment().subtract(4, 'hours'), moment()],
-            'Today': [moment().startOf('day'), moment()],
-            'Yesterday': [moment().subtract(1, 'days').startOf('day'), moment().subtract(1, 'days').endOf('day')],
-            'Past 2 Days': [moment().subtract(2, 'days').startOf('day'), moment().subtract(2, 'days').endOf('day')],
-            'Last 7 Days': [moment().subtract(6, 'days').startOf('day'), moment()],
-            'Last 30 Days': [moment().subtract(29, 'days').startOf('day'), moment()],
-            'This Month': [moment().startOf('month'), moment().endOf('month')],
-            'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
-        }
-
-        setInterval(() => {
-            ranges['Past 5 Minutes'][0] = moment().subtract(5, 'minutes');
-            ranges['Past 5 Minutes'][1] = moment();
-            ranges['Past 15 Minutes'][0] = moment().subtract(15, 'minutes');
-            ranges['Past 15 Minutes'][1] = moment();
-            ranges['Past 30 Minutes'][0] = moment().subtract(30, 'minutes');
-            ranges['Past 30 Minutes'][1] = moment();
-        }, 60000)
-
         $('#date-range').daterangepicker({
             endDate: momentEnd,
             startDate: momentStart,
@@ -145,11 +123,41 @@
             timePicker24Hour: true,
             opens: "right",
             showDropdowns: true,
-            ranges: ranges,
+            ranges: {
+                'Past 5 Minutes': [moment().subtract(5, 'minutes'), moment()],
+                'Past 15 Minutes': [moment().subtract(15, 'minutes'), moment()],
+                'Past 30 Minutes': [moment().subtract(30, 'minutes'), moment()],
+                'Past 1 Hour': [moment().subtract(1, 'hours'), moment()],
+                'Past 4 Hours': [moment().subtract(4, 'hours'), moment()],
+                'Today': [moment().startOf('day'), moment()],
+                'Yesterday': [moment().subtract(1, 'days').startOf('day'), moment().subtract(1, 'days').endOf('day')],
+                'Past 2 Days': [moment().subtract(2, 'days').startOf('day'), moment().subtract(2, 'days').endOf('day')],
+                'Last 7 Days': [moment().subtract(6, 'days').startOf('day'), moment()],
+                'Last 30 Days': [moment().subtract(29, 'days').startOf('day'), moment()],
+                'This Month': [moment().startOf('month'), moment().endOf('month')],
+                'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+            },
             locale: {
                 format: 'DD/M hh:mm A'
             }
-        }, onUpdateRange);
+        }, function (newStart, newEnd, label) {
+            switch (label) {
+                case 'Custom Range': break
+                case 'Past 5 Minutes': [newStart, newEnd] = [moment().subtract(5, 'minutes'), moment()]; break
+                case 'Past 15 Minutes': [newStart, newEnd] = [moment().subtract(15, 'minutes'), moment()]; break
+                case 'Past 30 Minutes': [newStart, newEnd] = [moment().subtract(30, 'minutes'), moment()]; break
+                case 'Past 1 Hour': [newStart, newEnd] = [moment().subtract(1, 'hours'), moment()]; break
+                case 'Past 4 Hours': [newStart, newEnd] = [moment().subtract(4, 'hours'), moment()]; break
+                case 'Today': [newStart, newEnd] = [moment().startOf('day'), moment()]; break
+                case 'Yesterday': [newStart, newEnd] = [moment().subtract(1, 'days').startOf('day'), moment().subtract(1, 'days').endOf('day')]; break
+                case 'Past 2 Days': [newStart, newEnd] = [moment().subtract(2, 'days').startOf('day'), moment().subtract(2, 'days').endOf('day')]; break
+                case 'Last 7 Days': [newStart, newEnd] = [moment().subtract(6, 'days').startOf('day'), moment()]; break
+                case 'Last 30 Days': [newStart, newEnd] = [moment().subtract(29, 'days').startOf('day'), moment()]; break
+                case 'This Month': [newStart, newEnd] = [moment().startOf('month'), moment().endOf('month')]; break
+                case 'Last Month': [newStart, newEnd] = [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]; break
+            }
+            onUpdateRange(newStart, newEnd);
+        });
         onUpdateRange(momentStart, momentEnd);
 
         $container.on("scroll", debounce(checkScroll, 20));
@@ -185,6 +193,9 @@
 
             onUpdateRange(newStart, newEnd);
         });
+
+
+
     });
 
     function setCurrentVisibleEntry(entry) {
@@ -233,6 +244,7 @@
         HAS_MORE_BEFORE = true;
         IS_LOADING_AFTER = false;
         IS_LOADING_BEFORE = false;
+        $count.text('');
 
         if (EPOCH_DESIRED || force) {
             ENTRIES = [];
@@ -330,16 +342,18 @@
                     return
                 }
 
-                if (!result) {
+                if (!result.ticks || result.ticks.length == 0) {
+                    // @TODO: ASYNC
+                    // entries: null, scheduled: false, tasks: null
                     HAS_MORE_AFTER = false;
                     HAS_MORE_BEFORE = false;
                     return;
                 }
 
                 let max = Number.MIN_SAFE_INTEGER;
-                let tot = 0;
+                let count = 0;
 
-                result.forEach(it => {
+                result.ticks.forEach(it => {
                     let tick = TICKS[it.index];
                     tick.Count = it.count;
                     tick.Debug = it.debug;
@@ -349,9 +363,12 @@
                     tick.EpochEnd = it.epoch_end;
                     tick.EpochStart = it.epoch_start;
                     tick.Date = moment(new Date(tick.EpochStart * 1000));
-                    tot += tick.Count;
+                    count += tick.Count;
                     max = Math.max(max, tick.Count);
                 });
+
+                // https://stackoverflow.com/a/2901298/2204014
+                $('> .count', $chart).text((count).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") + ' events');
 
                 // artificial padding
                 max = Math.floor(max * 1.2);
@@ -503,7 +520,7 @@
                 if (filterId != FILTER_ID) {
                     return
                 }
-                if (!result) {
+                if (!result.entries || result.entries.length == 0) {
                     if (direction == 'before') {
                         HAS_MORE_BEFORE = false;
                     } else {
@@ -513,7 +530,7 @@
                     return
                 }
 
-                let entries = result.map((it) => {
+                let entries = result.entries.map((it) => {
                     let data = JSON.parse(it[3])
                     let level = it[2];
                     if (level < 0) {
@@ -608,6 +625,11 @@
             tds[2].textContent = entry.Message;
             tds[3].innerHTML = entry.Overview;
 
+            $('.tag', tds[3]).on('click', (e, el) => {
+                console.log(e, el);
+                return false
+            })
+
             tr.onclick = () => {
                 showEventAttributes(entry);
             }
@@ -671,13 +693,10 @@
     function getTags(json) {
         let out = [];
         for (const [key, value] of Object.entries(json)) {
-            if (key == 'level' || key == 'time' || key == 'msg') {
+            if (key == 'level' || key == 'time' || key == 'msg' || (typeof (value) == 'object')) {
                 continue
             }
-            if (typeof (value) == 'object') {
-                value = `<code>${JSON.stringify(value)}</code>`
-            }
-            out.push(`<span class="tag"><span class="key">${key}</span> <span class="value">${value}</span></span>`);
+            out.push(`<span class="tag" title="Add to filter"><span class="key">${key}</span> <span class="value">${value}</span></span>`);
         }
         return out.join(' ');
     }

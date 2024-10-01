@@ -25,10 +25,10 @@ type writer struct {
 
 type handler struct {
 	writers  sync.Pool
-	ingester *ingesterImpl
+	ingester *Ingester
 }
 
-func newHandler(ingester *ingesterImpl, config *HandlerConfig) *handler {
+func newHandler(ingester *Ingester, config *HandlerConfig) *handler {
 	if config == nil {
 		config = &HandlerConfig{}
 	}
@@ -70,7 +70,7 @@ func (h *handler) Handle(ctx context.Context, r slog.Record) error {
 	}
 
 	if w.buffer.Len() > 0 {
-		if err := h.ingester.ingest(r.Time, int8(r.Level), bytes.Clone(w.buffer.Bytes())); err != nil {
+		if err := h.ingester.Ingest(r.Time, int8(r.Level), bytes.Clone(w.buffer.Bytes())); err != nil {
 			return err
 		}
 	}

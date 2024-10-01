@@ -11,24 +11,46 @@ import (
 
 var compiledCache = sync.Map{}
 
-type compiledExpr struct {
+type ExprMapper interface {
+	GroupEnd()
+	GroupStart()
+	Operator(op string)
+	Term(field, term string, sequence, regex bool)
+	In(field string, values []string)
+	Number(field, condition string, value float64)
+	NumberBetween(field string, x, y float64)
+	NumberIn(field string, values []float64)
+	Sql() string
+	Args() []any
+}
+
+// @TODO: Generic, para permitir implemetacao em memoria e multiplos databases
+type Expression struct {
 	Sql  string
 	Args []any
 }
 
-// compileExpr a expression into an unbound query (using the '?' bindvar).
-func compileExpr(expression string) (*compiledExpr, error) {
+// Compile a expression
+func Compile(expression string, mapper ExprMapper) (*Expression, error) {
 	expression = strings.TrimSpace(expression)
 
-	if c, ok := compiledCache.Load(expression); ok {
-		return c.(*compiledExpr), nil
+	// if c, ok := compiledCache.Load(expression); ok {
+	// 	return c.(*Expression), nil
+	// }
+
+	if mapper == nil {
+		mapper = &SqliteExprMapper{
+			args: []any{},
+			sql:  bytes.NewBuffer(make([]byte, 0, 512)),
+		}
 	}
 
 	s := &compileExprState{
-		args:  []any{},
-		sql:   bytes.NewBuffer(make([]byte, 0, 512)),
-		buf:   bytes.NewBuffer(make([]byte, 0, 256)),
-		field: bytes.NewBuffer(make([]byte, 0, 10)),
+		args:   []any{},
+		sql:    bytes.NewBuffer(make([]byte, 0, 512)),
+		buf:    bytes.NewBuffer(make([]byte, 0, 256)),
+		field:  bytes.NewBuffer(make([]byte, 0, 10)),
+		mapper: mapper,
 	}
 
 	var (
@@ -77,17 +99,20 @@ func compileExpr(expression string) (*compiledExpr, error) {
 				}
 			}
 
+			s.appendOperator()
+
+			s.mapper.GroupStart()
+			s.sql.WriteByte('(')
+
 			substr := inner.String()
-			subCompiled, subErr := compileExpr(substr)
+			subCompiled, subErr := Compile(substr, mapper)
 			if subErr != nil {
 				return nil, errors.Join(fmt.Errorf("invalid expression %s ", substr), subErr)
 			}
-
-			s.appendOperator()
-
-			s.sql.WriteByte('(')
 			s.sql.WriteString(subCompiled.Sql)
+
 			s.sql.WriteByte(')')
+			s.mapper.GroupEnd()
 			s.args = append(s.args, subCompiled.Args...)
 
 			i = j
@@ -158,17 +183,23 @@ func compileExpr(expression string) (*compiledExpr, error) {
 		return nil, err
 	}
 
-	compiled := &compiledExpr{
-		Sql:  s.sql.String(),
-		Args: s.args,
+	// compiled := &Expression{
+	// 	Sql:  s.sql.String(),
+	// 	Args: s.args,
+	// }
+
+	compiled := &Expression{
+		Sql:  s.mapper.Sql(),
+		Args: s.mapper.Args(),
 	}
 
-	compiledCache.Store(expression, compiled)
+	// compiledCache.Store(expression, compiled)
 
 	return compiled, nil
 }
 
 type compileExprState struct {
+	mapper     ExprMapper
 	args       []any
 	inQuote    bool
 	inArray    bool
@@ -180,11 +211,20 @@ type compileExprState struct {
 }
 
 func (s *compileExprState) appendOperator() {
+
+	if s.operator == "" {
+		s.mapper.Operator("OR")
+	} else {
+		s.mapper.Operator(s.operator)
+	}
+
 	if s.sql.Len() > 0 {
 		if s.operator == "" {
 			s.sql.WriteString(" OR ")
 		} else {
+			s.sql.WriteByte(' ')
 			s.sql.WriteString(s.operator)
+			s.sql.WriteByte(' ')
 		}
 	}
 	s.operator = ""
@@ -210,25 +250,26 @@ func (s *compileExprState) closeArray() error {
 	if len(s.arrayParts) == 3 && s.arrayParts[1] == "TO" {
 		// field:[400 TO 499]
 
+		x, err := strconv.ParseFloat(s.arrayParts[0], 64)
+		if err != nil {
+			return errors.New("invalid clause [" + strings.Join(s.arrayParts, "") + "]")
+		}
+
+		y, err := strconv.ParseFloat(s.arrayParts[2], 64)
+		if err != nil {
+			return errors.New("invalid clause [" + strings.Join(s.arrayParts, "") + "]")
+		}
+
 		s.sql.WriteString("CAST(json_extract(e.content, ?) AS NUMERIC) BETWEEN ? AND ?")
-		s.args = append(s.args, "$."+fieldName)
+		s.args = append(s.args, "$."+fieldName, x, y)
 
-		if n, err := strconv.ParseFloat(s.arrayParts[0], 64); err != nil {
-			return errors.New("invalid clause [" + strings.Join(s.arrayParts, "") + "]")
-		} else {
-			s.args = append(s.args, n)
-		}
+		s.mapper.NumberBetween(fieldName, x, y)
 
-		if n, err := strconv.ParseFloat(s.arrayParts[2], 64); err != nil {
-			return errors.New("invalid clause [" + strings.Join(s.arrayParts, "") + "]")
-		} else {
-			s.args = append(s.args, n)
-		}
 	} else {
 
 		var (
-			textArgs   []any
-			numberArgs []any
+			textArgs   []string
+			numberArgs []float64
 		)
 
 		for _, v := range s.arrayParts {
@@ -242,10 +283,12 @@ func (s *compileExprState) closeArray() error {
 		group := len(numberArgs) > 0 && len(textArgs) > 0
 
 		if group {
+			s.mapper.GroupStart()
 			s.sql.WriteByte('(')
 		}
 
 		if len(numberArgs) > 0 {
+			// @TODO: if len(numberArgs) == 1
 			s.args = append(s.args, "$."+fieldName)
 			s.sql.WriteString("CAST(json_extract(e.content, ?) AS NUMERIC) IN (")
 			for i, v := range numberArgs {
@@ -256,9 +299,12 @@ func (s *compileExprState) closeArray() error {
 				s.args = append(s.args, v)
 			}
 			s.sql.WriteByte(')')
+
+			s.mapper.NumberIn(fieldName, numberArgs)
 		}
 
 		if group {
+			s.mapper.Operator("OR")
 			s.sql.WriteString(" OR ")
 		}
 
@@ -273,9 +319,12 @@ func (s *compileExprState) closeArray() error {
 				s.args = append(s.args, v)
 			}
 			s.sql.WriteByte(')')
+
+			s.mapper.In(fieldName, textArgs)
 		}
 
 		if group {
+			s.mapper.GroupEnd()
 			s.sql.WriteByte(')')
 		}
 	}
@@ -301,7 +350,7 @@ func (s *compileExprState) appendSingleTerm() {
 		text := s.buf.String()
 		textUp := strings.ToUpper(text)
 		if textUp == "AND" || textUp == "OR" {
-			s.operator = " " + textUp + " "
+			s.operator = textUp
 			s.buf.Reset()
 			return
 		}
@@ -341,18 +390,20 @@ func (s *compileExprState) appendSingleTerm() {
 		}
 
 		if isNumeric {
+			s.mapper.Number(fieldName, numberCondition, number)
+
 			s.sql.WriteString("CAST(json_extract(e.content, ?) AS NUMERIC) ")
 			s.sql.WriteString(numberCondition)
 			s.sql.WriteString(" ? ")
-
 			s.args = append(s.args, "$."+fieldName, number)
+
 			s.buf.Reset()
 			s.field.Reset()
 		} else {
+			s.mapper.Term(fieldName, text, false, strings.LastIndexByte(text, '*') >= 0)
+
 			s.sql.WriteString("json_extract(e.content, ?) LIKE ?")
-
 			s.args = append(s.args, "$."+fieldName)
-
 			if strings.LastIndexByte(text, '*') >= 0 {
 				s.args = append(s.args, strings.ReplaceAll(text, "*", "%"))
 			} else {
@@ -379,9 +430,13 @@ func (s *compileExprState) appendSequence() {
 		if s.field.Len() > 0 {
 			fieldName = s.field.String()
 		}
+
 		s.args = append(s.args, "$."+fieldName)
 
 		text := s.buf.String()
+
+		s.mapper.Term(fieldName, text, true, strings.LastIndexByte(text, '*') >= 0)
+
 		if strings.LastIndexByte(text, '*') >= 0 {
 			s.sql.WriteString("json_extract(e.content, ?) LIKE ?")
 			s.args = append(s.args, strings.ReplaceAll(text, "*", "%"))

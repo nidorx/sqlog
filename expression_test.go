@@ -358,7 +358,7 @@ func Test_CompileIncomplete(t *testing.T) {
 }
 
 func runTest(t *testing.T, tt testExpressionData) {
-	compiled, err := compileExpr(tt.expr)
+	compiled, err := Compile(tt.expr, nil)
 	assert.NoError(t, err)
 	// buffer := &bytes.Buffer{}
 	// args := c.Process(nil, buffer, nil)
@@ -389,10 +389,10 @@ func runTest(t *testing.T, tt testExpressionData) {
 	assert.Equal(t, tt.args, compiled.Args)
 }
 
-// func Test_CompilSingle(t *testing.T) {
-// 	runTest(t, testCompileData{
-// 		`(hell\"o AND \"world)`,
-// 		"(json_extract(e.content, ?) LIKE ? AND json_extract(e.content, ?) LIKE ?)",
-// 		[]any{"$.msg", `%hell"o%`, "$.msg", `%"world%`},
-// 	})
-// }
+func Test_CompilSingle(t *testing.T) {
+	runTest(t, testExpressionData{
+		`(hell\"o AND \"world)`,
+		"(json_extract(e.content, ?) LIKE ? AND json_extract(e.content, ?) LIKE ?)",
+		[]any{"$.msg", `%hell"o%`, "$.msg", `%"world%`},
+	})
+}

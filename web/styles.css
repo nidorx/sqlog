@@ -1,11 +1,3 @@
-/* 
-RED 1: #e72727
-RED 2: #db999a
-BLUE 1: #046eab
-BLUE 2: #b3e5fc
-
-GRAY: #d2d2d2
-*/
 
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
 
@@ -218,10 +210,18 @@ strong {
     display: none;
 }
 
+#chart .count  {
+    position: absolute;
+    left: 0;
+    z-index: 5;
+    top: -10px;
+}
+
 #chart .zoom  {
     position: absolute;
     right: 0;
     z-index: 5;
+    top: -10px;
 }
 
 #chart .zoom .btn {

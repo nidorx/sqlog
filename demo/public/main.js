@@ -35,11 +35,11 @@
     Nodes = {
 
         // Settings
-        density: 13,
+        density: 12,
         drawDistance: 30,
         baseRadius: 5,
         maxLineThickness: 0.8,
-        reactionSensitivity: 3,
+        reactionSensitivity: 8,
         lineThickness: 0.5,
 
         points: [],

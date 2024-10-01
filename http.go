@@ -13,12 +13,14 @@ import (
 )
 
 var (
-	devDemo = true // running "/demo/main.go"
+	// running "/demo/main.go"
+	devDemo = true
+
 	//go:embed web/*
 	webFiles embed.FS
 )
 
-func (l *logImpl) HttpHandler() http.Handler {
+func (l *sqlog) HttpHandler() http.Handler {
 
 	var wfs http.FileSystem
 
@@ -59,57 +61,49 @@ func (l *logImpl) HttpHandler() http.Handler {
 }
 
 // ServeHTTPTicks tick api
-func (l *logImpl) ServeHTTPTicks(w http.ResponseWriter, r *http.Request) {
+func (l *sqlog) ServeHTTPTicks(w http.ResponseWriter, r *http.Request) {
 	var (
-		q           = r.URL.Query()
-		expr        = q.Get("expr")
-		level       = q.Get("level")
-		levels      map[string]bool
-		maxResult   = getInt(q, "limit")
-		epochStart  = getInt64(q, "epoch")
-		intervalSec = getInt(q, "interval")
+		q      = r.URL.Query()
+		levels []string
 	)
 
-	if level != "" {
-		levels = make(map[string]bool)
-		for _, v := range strings.Split(level, ",") {
-			levels[v] = true
-		}
+	if level := q.Get("level"); level != "" {
+		levels = strings.Split(level, ",")
 	}
 
-	list, err := l.storage.listTicks(expr, levels, epochStart, intervalSec, maxResult)
-	w.Header().Set("Content-Type", "application/json")
-	if err != nil {
-		w.WriteHeader(400)
-		json.NewEncoder(w).Encode(map[string]any{
-			"error": err.Error(),
-		})
-	} else {
-		json.NewEncoder(w).Encode(list)
-	}
+	list, err := l.Ticks(&TicksInput{
+		Expr:        q.Get("expr"),
+		Level:       levels,
+		EpochEnd:    getInt64(q, "epoch"),
+		IntervalSec: getInt(q, "interval"),
+		MaxResult:   getInt(q, "limit"),
+	})
+	sendJson(w, list, err)
 }
 
 // ServeHTTPEntries entries api. (seek method or keyset pagination {before, after})
-func (l *logImpl) ServeHTTPEntries(w http.ResponseWriter, r *http.Request) {
+func (l *sqlog) ServeHTTPEntries(w http.ResponseWriter, r *http.Request) {
 	var (
-		q            = r.URL.Query()
-		expr         = q.Get("expr")
-		level        = q.Get("level")
-		levels       map[string]bool
-		direction    = q.Get("dir") // before, after
-		epochEnd     = getInt64(q, "epoch")
-		nanosEnd     = getInt(q, "nanos")
-		limitResults = getInt(q, "limit")
+		q      = r.URL.Query()
+		levels []string
 	)
 
-	if level != "" {
-		levels = make(map[string]bool)
-		for _, v := range strings.Split(level, ",") {
-			levels[v] = true
-		}
+	if level := q.Get("level"); level != "" {
+		levels = strings.Split(level, ",")
 	}
 
-	entries, err := l.storage.listEntries(expr, levels, direction, epochEnd, nanosEnd, limitResults)
+	entries, err := l.Entries(&EntriesInput{
+		Expr:       q.Get("expr"),
+		Level:      levels,
+		Direction:  q.Get("dir"), // before, after
+		EpochStart: getInt64(q, "epoch"),
+		NanosStart: getInt(q, "nanos"),
+		MaxResult:  getInt(q, "limit"),
+	})
+	sendJson(w, entries, err)
+}
+
+func sendJson(w http.ResponseWriter, data any, err error) {
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
 		w.WriteHeader(400)
@@ -117,7 +111,7 @@ func (l *logImpl) ServeHTTPEntries(w http.ResponseWriter, r *http.Request) {
 			"error": err.Error(),
 		})
 	} else {
-		json.NewEncoder(w).Encode(entries)
+		json.NewEncoder(w).Encode(data)
 	}
 }
 
