@@ -13,16 +13,20 @@ type exprParseState[E any] struct {
 	inArray    bool
 	operator   string
 	arrayParts []string
+	dirty      bool
 	buf        *bytes.Buffer // current value
 	field      *bytes.Buffer // current field name
 }
 
 func (s *exprParseState[E]) addOperator() {
-	if s.operator == "" {
-		s.builder.Operator("OR")
-	} else {
-		s.builder.Operator(s.operator)
+	if s.dirty {
+		if s.operator == "" {
+			s.builder.Operator("OR")
+		} else {
+			s.builder.Operator(s.operator)
+		}
 	}
+
 	s.operator = ""
 }
 
@@ -100,6 +104,7 @@ func (s *exprParseState[E]) closeArray() error {
 		}
 	}
 
+	s.dirty = true
 	s.arrayParts = nil
 
 	return nil
@@ -118,21 +123,20 @@ func (s *exprParseState[E]) addTermSingle() {
 
 	if s.buf.Len() > 0 {
 
-		text := s.buf.String()
-		textUp := strings.ToUpper(text)
-		if textUp == "AND" || textUp == "OR" {
-			s.operator = textUp
+		var (
+			number          float64
+			isNumeric       bool
+			numberCondition string
+			text            = s.buf.String()
+			textUpper       = strings.ToUpper(text)
+		)
+		if textUpper == "AND" || textUpper == "OR" {
+			s.operator = textUpper
 			s.buf.Reset()
 			return
 		}
 
 		s.addOperator()
-
-		var (
-			number          float64
-			isNumeric       bool
-			numberCondition string
-		)
 
 		fieldName := "msg"
 		if s.field.Len() > 0 {
@@ -162,12 +166,11 @@ func (s *exprParseState[E]) addTermSingle() {
 
 		if isNumeric {
 			s.builder.Number(fieldName, numberCondition, number)
-
-			s.buf.Reset()
-			s.field.Reset()
 		} else {
 			s.builder.Text(fieldName, text, false, strings.LastIndexByte(text, '*') >= 0)
 		}
+
+		s.dirty = true
 	}
 	s.buf.Reset()
 	s.field.Reset()
@@ -192,6 +195,7 @@ func (s *exprParseState[E]) addTermSequence() {
 		text := s.buf.String()
 
 		s.builder.Text(fieldName, text, true, strings.LastIndexByte(text, '*') >= 0)
+		s.dirty = true
 	}
 	s.buf.Reset()
 	s.field.Reset()

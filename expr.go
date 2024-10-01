@@ -9,10 +9,6 @@ import (
 	"sync"
 )
 
-type ExprBuilderFactory[E any] interface {
-	Init(expression string) ExprBuilder[E]
-}
-
 // ExprBuilder interface do construtor de expressões
 type ExprBuilder[E any] interface {
 	Build() E
@@ -26,9 +22,11 @@ type ExprBuilder[E any] interface {
 	NumberIn(field string, values []float64)
 }
 
+type ExprBuilderFactory[E any] func(expression string) ExprBuilder[E]
+
 // NewExprBuilder cria um novo builder de expressão.
 // Permite utilizar o mesmo padrão de filtro em dialetos diversos (Ex. Memory, Sqlite, PostgreSQL)
-func NewExprBuilder[E any, F ExprBuilderFactory[E]](factory F) func(expression string) (E, error) {
+func NewExprBuilder[E any](factory ExprBuilderFactory[E]) func(expression string) (E, error) {
 
 	var parse func(expression string, builder ExprBuilder[E]) error
 
@@ -95,6 +93,7 @@ func NewExprBuilder[E any, F ExprBuilderFactory[E]](factory F) func(expression s
 				}
 
 				s.builder.GroupEnd()
+				s.dirty = true
 
 				i = j
 			} else if b == '[' && !s.inQuote {
@@ -178,7 +177,7 @@ func NewExprBuilder[E any, F ExprBuilderFactory[E]](factory F) func(expression s
 			return c.(E), nil
 		}
 
-		mapper := factory.Init(expression)
+		mapper := factory(expression)
 
 		err = parse(expression, mapper)
 		if err != nil {

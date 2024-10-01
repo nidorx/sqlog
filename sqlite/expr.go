@@ -7,21 +7,17 @@ import (
 )
 
 var (
-	sliteExpBuilder = sqlog.NewExprBuilder(&SqliteExprBuilderFactory{})
+	sliteExpBuilder = sqlog.NewExprBuilder(func(expression string) sqlog.ExprBuilder[*SqliteExpr] {
+		return &SqliteExprBuilder{
+			args: []any{},
+			sql:  bytes.NewBuffer(make([]byte, 0, 512)),
+		}
+	})
 )
 
 type SqliteExpr struct {
 	Sql  string
 	Args []any
-}
-
-type SqliteExprBuilderFactory struct{}
-
-func (f *SqliteExprBuilderFactory) Init(expression string) sqlog.ExprBuilder[*SqliteExpr] {
-	return &SqliteExprBuilder{
-		args: []any{},
-		sql:  bytes.NewBuffer(make([]byte, 0, 512)),
-	}
 }
 
 type SqliteExprBuilder struct {
