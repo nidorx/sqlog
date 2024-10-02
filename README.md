@@ -1,4 +1,10 @@
-# SQLog (WIP)
+<br>
+<div align="center">
+    <img src="./docs/logo.png" />
+    <p align="center">
+        <strong>SQLog</strong> - Connecting the dots
+    </p>    
+</div>
 
 **SQLog** is a **Golang** library that leverages the power of **slog** to streamline log management in a simple and efficient way. One of its key advantages is its integration with **SQLite**, an embedded database, meaning there's no need for an external database server setup. This reduces operational costs and drastically simplifies system maintenance, as everything runs **embedded**, without complex dependencies.
 

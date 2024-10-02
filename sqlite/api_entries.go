@@ -3,9 +3,10 @@ package sqlite
 import (
 	"bytes"
 	"sort"
-	"sqlog"
 	"strings"
 	"time"
+
+	"github.com/nidorx/sqlog"
 )
 
 var (

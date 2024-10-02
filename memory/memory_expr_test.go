@@ -2,8 +2,9 @@ package memory
 
 import (
 	"encoding/json"
-	"sqlog"
 	"testing"
+
+	"github.com/nidorx/sqlog"
 
 	"github.com/stretchr/testify/assert"
 )

@@ -10,12 +10,13 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
-	"sqlog"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/nidorx/sqlog"
 )
 
 var (

@@ -2,9 +2,10 @@ package sqlite
 
 import (
 	"bytes"
-	"sqlog"
 	"strings"
 	"time"
+
+	"github.com/nidorx/sqlog"
 )
 
 var (

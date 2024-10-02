@@ -14,7 +14,7 @@ import (
 
 var (
 	// running "/demo/main.go"
-	devDemo = true
+	devDemo = false
 
 	//go:embed web/*
 	webFiles embed.FS

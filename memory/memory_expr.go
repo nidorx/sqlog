@@ -2,9 +2,10 @@ package memory
 
 import (
 	"encoding/json"
-	"sqlog"
 	"strconv"
 	"unsafe"
+
+	"github.com/nidorx/sqlog"
 )
 
 var (

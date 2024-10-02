@@ -2,7 +2,8 @@ package sqlite
 
 import (
 	"bytes"
-	"sqlog"
+
+	"github.com/nidorx/sqlog"
 )
 
 var (

@@ -2,10 +2,11 @@ package sqlite
 
 import (
 	"errors"
-	"sqlog"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nidorx/sqlog"
 
 	_ "github.com/mattn/go-sqlite3"
 )

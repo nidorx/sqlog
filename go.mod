@@ -1,4 +1,4 @@
-module sqlog
+module github.com/nidorx/sqlog
 
 go 1.23
 

@@ -1,6 +1,6 @@
 package memory
 
-import "sqlog"
+import "github.com/nidorx/sqlog"
 
 type MemoryConfig struct {
 	// Each time the current log file reaches MaxFilesize,

@@ -2,9 +2,10 @@ package sqlite
 
 import (
 	"sort"
-	"sqlog"
 	"sync/atomic"
 	"time"
+
+	"github.com/nidorx/sqlog"
 )
 
 const (

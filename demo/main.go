@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"sqlog"
-	"sqlog/sqlite"
 	"strings"
+
+	"github.com/nidorx/sqlog/sqlite"
+
+	"github.com/nidorx/sqlog"
 )
 
 var (
