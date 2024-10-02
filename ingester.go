@@ -126,7 +126,7 @@ func (i *Ingester) routineCheck() {
 
 		case <-tick.C:
 
-			for ; i.flushChunk.Ready(); i.flushChunk = i.flushChunk.Next() {
+			for {
 				chunk := i.flushChunk
 				if chunk.Empty() {
 					break
@@ -154,6 +154,7 @@ func (i *Ingester) routineCheck() {
 					}
 					break
 				}
+				i.flushChunk = i.flushChunk.Next()
 			}
 
 			// limita consumo de memória
@@ -168,40 +169,6 @@ func (i *Ingester) routineCheck() {
 				i.flushChunk.Init(i.config.Chunks)
 			}
 
-			// if !block.Empty() {
-
-			// 	if block.Ready() {
-			// 		if err := i.storage.Flush(block); err != nil {
-			// 			block.retries++
-			// 			slog.Error("[sqlog] error writing chunk", slog.Any("error", err))
-
-			// 			if block.retries > uint(i.config.FlushMaxRetry) {
-			// 				block.Init(i.config.Chunks + 1)
-			// 				i.flushBlock = block.next
-			// 			}
-			// 		} else {
-			// 			block.Init(i.config.Chunks + 1)
-			// 			i.flushBlock = block.next
-			// 		}
-			// 	} else if int(block.TTL().Seconds()) > i.config.FlushAfterSec {
-			// 		// bloqueia a escrita no chunk para que possa ser persistido nos próximos ticks
-			// 		block.Lock()
-			// 		block.Init(i.config.Chunks)
-			// 	}
-
-			// 	// evita vazamento de memória
-			// 	if i.flushBlock.Depth() > i.config.MaxDirtyChunks {
-			// 		for {
-			// 			if i.flushBlock.Depth() > i.config.MaxDirtyChunks {
-			// 				block.Init(1)
-			// 				i.flushBlock = block.next
-			// 			} else {
-			// 				break
-			// 			}
-			// 		}
-			// 		i.flushBlock.Init(i.config.Chunks)
-			// 	}
-			// }
 			tick.Reset(d)
 
 		case <-i.quit:

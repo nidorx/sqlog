@@ -13,20 +13,41 @@ type Config struct {
 	Ingester *IngesterConfig
 }
 
+// Log SQLog interface
 type Log interface {
+
+	// Stop terminates any ongoing logging operations. It should be called
+	// to release resources and stop log collection or processing.
 	Stop()
+
+	// Handler returns the primary log handler
 	Handler() slog.Handler
+
+	// Fanout distributes logs to multiple slog.Handler instances in parallel.
+	// This allows logs to be processed by several handlers simultaneously.
+	Fanout(...slog.Handler)
+
+	// HttpHandler returns an http.Handler responsible for handling HTTP requests
+	// related to the api
 	HttpHandler() http.Handler
+
+	// Ticks api
 	Ticks(*TicksInput) (*Output, error)
+
+	// Entries api
 	Entries(*EntriesInput) (*Output, error)
+
+	// ServeHTTPTicks handles HTTP requests for Ticks api
 	ServeHTTPTicks(w http.ResponseWriter, r *http.Request)
+
+	// ServeHTTPEntries handles HTTP requests for Entries api
 	ServeHTTPEntries(w http.ResponseWriter, r *http.Request)
 }
 
 type sqlog struct {
 	close    sync.Once
 	config   *Config
-	handler  slog.Handler
+	handler  *handler
 	storage  Storage
 	ingester *Ingester
 }
@@ -61,6 +82,10 @@ func New(config *Config) (*sqlog, error) {
 
 func (l *sqlog) Handler() slog.Handler {
 	return l.handler
+}
+
+func (l *sqlog) Fanout(handlers ...slog.Handler) {
+	l.handler.fanout(handlers...)
 }
 
 func (l *sqlog) Stop() {

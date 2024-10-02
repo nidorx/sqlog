@@ -24,8 +24,11 @@ type writer struct {
 }
 
 type handler struct {
+	mu       sync.Mutex
 	writers  sync.Pool
 	ingester *Ingester
+	config   *HandlerConfig
+	handlers []slog.Handler // Fanout
 }
 
 func newHandler(ingester *Ingester, config *HandlerConfig) *handler {
@@ -47,6 +50,7 @@ func newHandler(ingester *Ingester, config *HandlerConfig) *handler {
 	}
 
 	h := &handler{
+		config:   config,
 		ingester: ingester,
 	}
 
@@ -60,39 +64,99 @@ func newHandler(ingester *Ingester, config *HandlerConfig) *handler {
 	return h
 }
 
-func (h *handler) Handle(ctx context.Context, r slog.Record) error {
-	w := h.writers.Get().(*writer)
-	w.buffer.Reset()
+func (h *handler) fanout(handlers ...slog.Handler) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.handlers = append(h.handlers, handlers...)
+}
 
-	r.Time = r.Time.UTC()
-	if err := w.encoder.Handle(ctx, r); err != nil {
-		return err
-	}
+func (h *handler) Handle(ctx context.Context, record slog.Record) error {
 
-	if w.buffer.Len() > 0 {
-		if err := h.ingester.Ingest(r.Time, int8(r.Level), bytes.Clone(w.buffer.Bytes())); err != nil {
-			return err
+	for _, h2 := range h.handlers {
+		if h2.Enabled(ctx, record.Level) {
+			h2.Handle(ctx, record.Clone())
 		}
 	}
 
-	if w.buffer.Cap() <= bbcap {
-		h.writers.Put(w)
+	if h.Enabled(ctx, record.Level) {
+		w := h.writers.Get().(*writer)
+		w.buffer.Reset()
+
+		record.Time = record.Time.UTC()
+		if err := w.encoder.Handle(ctx, record); err != nil {
+			return err
+		}
+
+		if w.buffer.Len() > 0 {
+			if err := h.ingester.Ingest(record.Time, int8(record.Level), bytes.Clone(w.buffer.Bytes())); err != nil {
+				return err
+			}
+		}
+
+		if w.buffer.Cap() <= bbcap {
+			h.writers.Put(w)
+		}
 	}
 
 	return nil
 }
 
-func (h *handler) Enabled(ctx context.Context, level slog.Level) bool {
-	// @TODO: implementar
-	return true
+// enabled reports whether l is greater than or equal to the
+// minimum level.
+func (h *handler) Enabled(ctx context.Context, l slog.Level) bool {
+	minLevel := slog.LevelInfo
+	if h.config.Options.Level != nil {
+		minLevel = h.config.Options.Level.Level()
+	}
+	if l >= minLevel {
+		return true
+	}
+
+	for _, h2 := range h.handlers {
+		if h2.Enabled(ctx, l) {
+			return true
+		}
+	}
+
+	return false
 }
 
+// WithAttrs returns a new Handler whose attributes consist of
+// both the receiver's attributes and the arguments.
 func (h *handler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	// @TODO: implementar
-	return h
+	o := &handler{
+		config:   h.config,
+		ingester: h.ingester,
+	}
+	parentPool := &h.writers
+	o.writers.New = func() any {
+		w := parentPool.Get().(*writer)
+		w.encoder = w.encoder.WithAttrs(attrs)
+		return w
+	}
+
+	for _, h2 := range h.handlers {
+		o.handlers = append(o.handlers, h2.WithAttrs(attrs))
+	}
+	return o
 }
 
+// WithGroup returns a new Handler with the given group appended to
+// the receiver's existing groups.
 func (h *handler) WithGroup(name string) slog.Handler {
-	// @TODO: implementar
-	return h
+	o := &handler{
+		config:   h.config,
+		ingester: h.ingester,
+	}
+	parentPool := &h.writers
+	o.writers.New = func() any {
+		w := parentPool.Get().(*writer)
+		w.encoder = w.encoder.WithGroup(name)
+		return w
+	}
+
+	for _, h2 := range h.handlers {
+		o.handlers = append(o.handlers, h2.WithGroup(name))
+	}
+	return o
 }
