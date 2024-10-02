@@ -11,7 +11,6 @@ type Tick struct {
 	Error int64 `json:"error"`
 }
 
-// TicksInput dados para buscar de registros
 type TicksInput struct {
 	Expr        string   `json:"expr"`
 	Level       []string `json:"level"` // ["debug","info","warn","error"]
@@ -20,7 +19,6 @@ type TicksInput struct {
 	MaxResult   int      `json:"limit"`
 }
 
-// ListInput dados para buscar de registros
 type EntriesInput struct {
 	Expr       string   `json:"expr"`
 	Level      []string `json:"level"` // ["debug","info","warn","error"]
@@ -30,13 +28,12 @@ type EntriesInput struct {
 	MaxResult  int      `json:"limit"`
 }
 
-// TicksOutput resultado da consulta de Ticks
 type Output struct {
-	Scheduled bool    `json:"scheduled,omitempty"` // Indica que esse é um resultado parcial
-	TaskIds   []int32 `json:"tasks,omitempty"`     // O id para consulta futura
-	Error     error   `json:"-"`                   // O último erro ocorrido
-	Ticks     []*Tick `json:"ticks,omitempty"`     // Os ticks disponíveis nessa resposta
-	Entries   []any   `json:"entries,omitempty"`   // Os registros de log disponíveis nessa resposta
+	Scheduled bool    `json:"scheduled,omitempty"` // Indicates that this is a partial result
+	TaskIds   []int32 `json:"tasks,omitempty"`     // The id so that the result can be retrieved in the future
+	Error     error   `json:"-"`                   // The last error occurred
+	Ticks     []*Tick `json:"ticks,omitempty"`     // The ticks available in this response
+	Entries   []any   `json:"entries,omitempty"`   // The log records available in this response
 }
 
 func (l *sqlog) Entries(input *EntriesInput) (*Output, error) {

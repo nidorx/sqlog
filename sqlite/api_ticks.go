@@ -2,7 +2,6 @@ package sqlite
 
 import (
 	"bytes"
-	"fmt"
 	"sqlog"
 	"strings"
 	"time"
@@ -106,7 +105,7 @@ func (s *storage) Ticks(input *sqlog.TicksInput) (*sqlog.Output, error) {
 	}
 
 	if expr = strings.TrimSpace(expr); expr != "" {
-		if compiled, err := ExpBuilderFn(expr); err != nil {
+		if compiled, err := s.config.ExprBuilder(expr); err != nil {
 			return nil, err
 		} else if compiled.Sql != "" {
 			buf.WriteString(clause)
@@ -126,7 +125,7 @@ func (s *storage) Ticks(input *sqlog.TicksInput) (*sqlog.Output, error) {
 		tickByIndex = map[int]*sqlog.Tick{}
 	)
 
-	fmt.Printf("[sqlog] Ticks\nSQL: %s\n\nARG: %v\n", sql, args) // debug
+	// fmt.Printf("[sqlog] Ticks\nSQL: %s\n\nARG: %v\n", sql, args) // debug
 
 	for _, d := range s.dbs {
 		if epochEnd < d.epochStart || (d.epochEnd != 0 && d.epochEnd < epochStart) {

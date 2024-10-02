@@ -2,7 +2,6 @@ package sqlite
 
 import (
 	"bytes"
-	"fmt"
 	"sort"
 	"sqlog"
 	"strings"
@@ -86,7 +85,7 @@ func (s *storage) Entries(input *sqlog.EntriesInput) (*sqlog.Output, error) {
 	}
 
 	if expr = strings.TrimSpace(expr); expr != "" {
-		if compiled, err := ExpBuilderFn(expr); err != nil {
+		if compiled, err := s.config.ExprBuilder(expr); err != nil {
 			return nil, err
 		} else if compiled.Sql != "" {
 			buf.WriteString(" AND (")
@@ -110,7 +109,7 @@ func (s *storage) Entries(input *sqlog.EntriesInput) (*sqlog.Output, error) {
 		// closedDbs []*storageDb
 	)
 
-	fmt.Printf("[sqlog] Entries\nSQL: %s\n\nARG: %v\n", sql, args) // debug
+	//fmt.Printf("[sqlog] Entries\nSQL: %s\n\nARG: %v\n", sql, args) // debug
 
 	for _, d := range s.dbs {
 		if direction == "before" {

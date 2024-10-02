@@ -7,7 +7,7 @@
  *
  * Extracted from https://github.com/IGLOU-EU/go-wildcard/blob/master/wildcard.go
  */
-package sqlog
+package memory
 
 // wildcardMatch returns true if the pattern matches the s string.
 // The pattern can contain the wildcard characters '?' and '*'.

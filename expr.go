@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-// ExprBuilder interface do construtor de expressões
+// ExprBuilder expression builder interface
 type ExprBuilder[E any] interface {
 	Build() E
 	GroupStart()

@@ -15,6 +15,9 @@ type Config struct {
 	Prefix        string            // Database name prefix (default "sqlog")
 	SQLiteOptions map[string]string // https://github.com/mattn/go-sqlite3?tab=readme-ov-file#connection-string
 
+	// Permite definir um processador de expressões personalizado
+	ExprBuilder func(expression string) (*Expr, error)
+
 	// Each time the current log file reaches MaxFilesize,
 	// it will be archived (default 20).
 	MaxFilesizeMB int32
@@ -106,6 +109,10 @@ func New(config *Config) (*storage, error) {
 
 	if config.IntervalSizeCheckSec <= 0 {
 		config.IntervalSizeCheckSec = 5
+	}
+
+	if config.ExprBuilder == nil {
+		config.ExprBuilder = ExpBuilderFn
 	}
 
 	dbs, err := initDbs(config.Dir, config.Prefix)

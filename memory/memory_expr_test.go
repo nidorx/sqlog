@@ -1,17 +1,18 @@
-package sqlog
+package memory
 
 import (
 	"encoding/json"
+	"sqlog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-var testExpMemoryEntries = []*Entry{}
+var testExpMemoryEntries = []*sqlog.Entry{}
 
 func init() {
 	for _, log := range testExpMemoryLogs {
-		testExpMemoryEntries = append(testExpMemoryEntries, &Entry{
+		testExpMemoryEntries = append(testExpMemoryEntries, &sqlog.Entry{
 			Content: []byte(log),
 		})
 	}

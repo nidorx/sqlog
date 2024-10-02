@@ -1,19 +1,20 @@
-package sqlog
+package memory
 
 import (
 	"encoding/json"
+	"sqlog"
 	"strconv"
 	"unsafe"
 )
 
 var (
-	MemoryExprBuilderFn = NewExprBuilder(func(expression string) (ExprBuilder[MemoryExpr], string) {
+	MemoryExprBuilderFn = sqlog.NewExprBuilder(func(expression string) (sqlog.ExprBuilder[MemoryExpr], string) {
 		return &MemoryExprBuilder{}, expression
 	})
 )
 
 // MemoryExpr is the structure that represents the expression to be evaluated in memory.
-type MemoryExpr func(e *Entry) bool
+type MemoryExpr func(e *sqlog.Entry) bool
 
 // MemoryExprBuilder is used to build memory expressions.
 type MemoryExprBuilder struct {
@@ -25,11 +26,11 @@ type MemoryExprBuilder struct {
 func (m *MemoryExprBuilder) Build() MemoryExpr {
 	stack := m.stack
 	if len(stack) == 0 {
-		return func(e *Entry) bool {
+		return func(e *sqlog.Entry) bool {
 			return true
 		}
 	}
-	return func(e *Entry) bool {
+	return func(e *sqlog.Entry) bool {
 		var j map[string]any
 		if err := json.Unmarshal(e.Content, &j); err != nil {
 			return false
@@ -153,14 +154,14 @@ func (m *MemoryExprBuilder) NumberIn(field string, values []float64) {
 }
 
 type memExpr interface {
-	eval(e *Entry, j map[string]any) bool
+	eval(e *sqlog.Entry, j map[string]any) bool
 }
 
 type memExprGroup struct {
 	stack []memExpr
 }
 
-func (m *memExprGroup) eval(e *Entry, j map[string]any) bool {
+func (m *memExprGroup) eval(e *sqlog.Entry, j map[string]any) bool {
 	for _, expr := range m.stack {
 		if !expr.eval(e, j) {
 			return false
@@ -173,7 +174,7 @@ type memExprOR struct {
 	stack []memExpr
 }
 
-func (m *memExprOR) eval(e *Entry, j map[string]any) bool {
+func (m *memExprOR) eval(e *sqlog.Entry, j map[string]any) bool {
 	for _, expr := range m.stack {
 		if expr.eval(e, j) {
 			return true
@@ -186,7 +187,7 @@ type memExprAND struct {
 	stack []memExpr
 }
 
-func (m *memExprAND) eval(e *Entry, j map[string]any) bool {
+func (m *memExprAND) eval(e *sqlog.Entry, j map[string]any) bool {
 	for _, expr := range m.stack {
 		if !expr.eval(e, j) {
 			return false
@@ -202,7 +203,7 @@ type memExprText struct {
 	isWildcard bool
 }
 
-func (m *memExprText) eval(e *Entry, j map[string]any) bool {
+func (m *memExprText) eval(e *sqlog.Entry, j map[string]any) bool {
 	var (
 		fieldValue string
 		field      = m.field
@@ -235,7 +236,7 @@ type memExprNumber struct {
 	value     float64
 }
 
-func (m *memExprNumber) eval(e *Entry, j map[string]any) bool {
+func (m *memExprNumber) eval(e *sqlog.Entry, j map[string]any) bool {
 	var (
 		fieldValue float64
 		field      = m.field
@@ -269,7 +270,7 @@ type memExprBetween struct {
 	x, y  float64
 }
 
-func (m *memExprBetween) eval(e *Entry, j map[string]any) bool {
+func (m *memExprBetween) eval(e *sqlog.Entry, j map[string]any) bool {
 	var (
 		fieldValue float64
 		field      = m.field
@@ -290,7 +291,7 @@ type memExprTextIn struct {
 	values []string
 }
 
-func (m *memExprTextIn) eval(e *Entry, j map[string]any) bool {
+func (m *memExprTextIn) eval(e *sqlog.Entry, j map[string]any) bool {
 	var (
 		fieldValue string
 		field      = m.field
@@ -315,7 +316,7 @@ type memExprNumberIn struct {
 	values []float64
 }
 
-func (m *memExprNumberIn) eval(e *Entry, j map[string]any) bool {
+func (m *memExprNumberIn) eval(e *sqlog.Entry, j map[string]any) bool {
 	var (
 		fieldValue float64
 		field      = m.field

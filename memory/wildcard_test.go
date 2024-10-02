@@ -7,7 +7,7 @@
  *
  * Extracted from https://github.com/IGLOU-EU/go-wildcard/blob/master/wildcard.go
  */
-package sqlog
+package memory
 
 import (
 	"testing"

@@ -1,32 +1,17 @@
 package sqlog
 
-// Storage contrato para storage
+// Storage storage contract
 type Storage interface {
-
-	// Close o storage deve realizar as limpezas durante o encerramento
-	Close() error
-
-	// Flush deve persistir o chunk
-	Flush(chunk *Chunk) error
+	Close() error             // Close storage must perform cleaning during shutdown
+	Flush(chunk *Chunk) error // Flush the chunk must persist
 }
 
+// StorageWithApi contract for storage that allows search
 type StorageWithApi interface {
 	Storage
-
-	// Close o storage deve realizar as limpezas durante o encerramento
-	Entries(input *EntriesInput) (*Output, error)
-
-	// Flush deve persistir o chunk
 	Ticks(input *TicksInput) (*Output, error)
+	Entries(input *EntriesInput) (*Output, error)
 }
-
-// func (l *sqlog) Entries(input *EntriesInput) (*Output, error) {
-// 	return l.storage.listEntries(input)
-// }
-
-// func (l *sqlog) Ticks(input *TicksInput) (*Output, error) {
-// 	return l.storage.listTicks(input)
-// }
 
 type DummyStorage struct {
 }
