@@ -49,3 +49,17 @@ func (l *sqlog) Ticks(input *TicksInput) (*Output, error) {
 	}
 	return &Output{}, nil
 }
+
+func (l *sqlog) Result(taskId int32) (*Output, error) {
+	if s, ok := l.storage.(StorageWithApi); ok {
+		return s.Result(taskId)
+	}
+	return &Output{}, nil
+}
+
+func (l *sqlog) Cancel(taskId int32) error {
+	if s, ok := l.storage.(StorageWithApi); ok {
+		return s.Cancel(taskId)
+	}
+	return nil
+}

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-var epoch = time.Time{}.UTC()
+// var epoch = time.Time{}.UTC()
 
 // Entry represents a formatted log entry
 type Entry struct {
@@ -17,16 +17,18 @@ type Entry struct {
 
 // Chunk stores up to 900 log entries that will be persisted in the storage
 type Chunk struct {
-	mu      sync.Mutex
-	id      int32       // The identifier of this chunk
-	cap     int32       // Configured batch size
-	book    int32       // Number of scheduled writes in this chunk
-	write   int32       // Number of writes completed
-	size    int64       // Size of content
-	retries uint        // Number of attempts to persist in the storage
-	locked  atomic.Bool // Indicates if this chunk no longer accepts writes
-	next    *Chunk      // Pointer to the next chunk
-	entries [900]*Entry // The log entries in this chunk
+	mu         sync.Mutex
+	id         int32       // The identifier of this chunk
+	cap        int32       // Configured batch size
+	book       int32       // Number of scheduled writes in this chunk
+	write      int32       // Number of writes completed
+	size       int64       // Size of content (in bytes)
+	epochStart int64       // First epoch
+	epochEnd   int64       // Last epoch
+	retries    int         // Number of attempts to persist in the storage
+	locked     atomic.Bool // Indicates if this chunk no longer accepts writes
+	next       *Chunk      // Pointer to the next chunk
+	entries    [900]*Entry // The log entries in this chunk
 }
 
 // NewChunk creates a new chunk with the specified capacity
@@ -83,27 +85,23 @@ func (c *Chunk) Depth() int {
 	return 1 + c.next.Depth()
 }
 
-// First retrieves the timestamp of the first entry in this chunk
-func (c *Chunk) First() time.Time {
-	index := c.write - 1
-	if index < 0 || c.Empty() {
-		return epoch
-	}
-	return c.entries[index].Time
+// First retrieves the epoch of the first entry in this chunk
+func (c *Chunk) First() int64 {
+	return c.epochStart
 }
 
-// Last retrieves the timestamp of the last entry in this chunk
-func (c *Chunk) Last() time.Time {
-	index := c.write - 1
-	if index < 0 || c.Empty() {
-		return epoch
-	}
-	return c.entries[0].Time
+// Last retrieves the epoch of the last entry in this chunk
+func (c *Chunk) Last() int64 {
+	return c.epochEnd
 }
 
 // TTL retrieves the age of the last log entry inserted in this chunk
 func (c *Chunk) TTL() time.Duration {
-	last := c.Last()
+	index := c.write - 1
+	if index < 0 || c.Empty() {
+		return 0
+	}
+	last := c.entries[index].Time
 	if last.IsZero() {
 		return 0
 	}
@@ -139,7 +137,7 @@ func (c *Chunk) List() []*Entry {
 
 // Put attempts to write the log entry into this chunk.
 // Returns the chunk that accepted the entry.
-// If the chunk that accepted the entry is the same, it returns true in the second parameter.
+// If the chunk that accepted the entry is the same, it returns false in the second parameter.
 func (c *Chunk) Put(e *Entry) (into *Chunk, isFull bool) {
 	if c.locked.Load() {
 		// chunk is locked
@@ -154,9 +152,30 @@ func (c *Chunk) Put(e *Entry) (into *Chunk, isFull bool) {
 		return i, true
 	}
 
+	defer atomic.AddInt32(&c.write, 1)
+
 	// safe write
 	c.entries[index] = e // @TODO: test to ensure it is safe
-	atomic.AddInt32(&c.write, 1)
+
+	entryEpoch := e.Time.Unix()
+	if last := c.epochEnd; entryEpoch > last {
+		atomic.CompareAndSwapInt64(&c.epochEnd, last, entryEpoch)
+	}
+
+	if first := c.epochStart; (first == 0 || entryEpoch < first) && !atomic.CompareAndSwapInt64(&c.epochStart, first, entryEpoch) {
+		// unlikely to happen
+		for i := 0; i < 3; i++ {
+			first = c.epochStart
+			if entryEpoch < first {
+				if atomic.CompareAndSwapInt64(&c.epochStart, first, entryEpoch) {
+					break
+				}
+			} else {
+				break
+			}
+		}
+	}
+
 	atomic.AddInt64(&c.size, int64(len(e.Content)))
 
 	return c, false

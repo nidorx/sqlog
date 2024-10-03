@@ -27,21 +27,33 @@ type Log interface {
 	// This allows logs to be processed by several handlers simultaneously.
 	Fanout(...slog.Handler)
 
-	// HttpHandler returns an http.Handler responsible for handling HTTP requests
-	// related to the api
-	HttpHandler() http.Handler
-
 	// Ticks api
 	Ticks(*TicksInput) (*Output, error)
 
 	// Entries api
 	Entries(*EntriesInput) (*Output, error)
 
+	// Result scheduled result api
+	Result(taskId int32) (*Output, error)
+
+	// Cancel scheduled result
+	Cancel(taskId int32) error
+
+	// HttpHandler returns an http.Handler responsible for handling
+	// HTTP requests related to the api
+	HttpHandler() http.Handler
+
 	// ServeHTTPTicks handles HTTP requests for Ticks api
 	ServeHTTPTicks(w http.ResponseWriter, r *http.Request)
 
 	// ServeHTTPEntries handles HTTP requests for Entries api
 	ServeHTTPEntries(w http.ResponseWriter, r *http.Request)
+
+	// ServeHTTPEntries handles HTTP requests for scheduled result api
+	ServeHTTPResult(w http.ResponseWriter, r *http.Request)
+
+	// ServeHTTPEntries handles HTTP requests to cancel scheduled result api
+	ServeHTTPCancel(w http.ResponseWriter, r *http.Request)
 }
 
 type sqlog struct {
@@ -61,11 +73,6 @@ func New(config *Config) (*sqlog, error) {
 	if storage == nil {
 		storage = &DummyStorage{}
 	}
-
-	// storage, err := newStorage(config.Storage)
-	// if err != nil {
-	// 	return nil, err
-	// }
 
 	ingester, err := NewIngester(config.Ingester, storage)
 	if err != nil {

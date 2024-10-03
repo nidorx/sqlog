@@ -19,6 +19,15 @@ type Config struct {
 	// Permite definir um processador de expressões personalizado
 	ExprBuilder func(expression string) (*Expr, error)
 
+	// Permite que o banco um banco de dados aceite logs antigos
+	// Isso pode ser útil em processos de migração de logs ou
+	// para permitir o recebimento de logs atrasados de alguma
+	// integraçao (Default 3600 = 1h)
+	//
+	// @TODO: Implementar solução para que o storage possa fazer
+	// a movimentação de logs para o intervalo correto
+	MaxChunkAgeSec int64
+
 	// Each time the current log file reaches MaxFilesize,
 	// it will be archived (default 20).
 	MaxFilesizeMB int32
@@ -50,6 +59,11 @@ type Config struct {
 	//
 	// See https://www.sqlite.org/wal.html#ckpt
 	IntervalWalCheckpointSec int32
+
+	// PASSIVE, FULL, RESTART, TRUNCATE (default to TRUNCATE)
+	//
+	// See https://www.sqlite.org/wal.html#ckpt
+	WalCheckpointMode string
 }
 
 // storage connection to a sqlite database
@@ -57,14 +71,15 @@ type Config struct {
 type storage struct {
 	sqlog.Storage
 	sqlog.StorageWithApi
-	mu        sync.Mutex
-	dbs       []*storageDb // todos os banco de dados desse storage
-	liveDbs   []*storageDb // os banco de dados que ainda estão salvando dados
-	config    *Config      //
-	taskIdSeq int32        // last task id
-	taskMap   sync.Map     // saída da execução
-	quit      chan struct{}
-	shutdown  chan struct{}
+	mu             sync.Mutex
+	dbs            []*storageDb // todos os banco de dados desse storage
+	liveDbs        []*storageDb // os banco de dados que ainda estão salvando dados
+	config         *Config      //
+	taskIdSeq      int32        // last task id
+	taskMap        sync.Map     // saída da execução
+	numActiveTasks int32        // registro das goroutines criadas para executar tarefas agendadas
+	quit           chan struct{}
+	shutdown       chan struct{}
 }
 
 func New(config *Config) (*storage, error) {
@@ -116,13 +131,17 @@ func New(config *Config) (*storage, error) {
 		config.ExprBuilder = ExpBuilderFn
 	}
 
+	if config.MaxChunkAgeSec <= 0 {
+		config.MaxChunkAgeSec = 3600
+	}
+
 	dbs, err := initDbs(config.Dir, config.Prefix)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(dbs) == 0 {
-		dbs = append(dbs, newDb(config.Dir, config.Prefix, time.Now()))
+		dbs = append(dbs, newDb(config.Dir, config.Prefix, time.Now(), config.MaxChunkAgeSec))
 	}
 
 	// init live live
@@ -133,15 +152,28 @@ func New(config *Config) (*storage, error) {
 	live.live = true
 
 	s := &storage{
-		config:  config,
-		dbs:     dbs,
-		liveDbs: []*storageDb{live},
+		config:   config,
+		dbs:      dbs,
+		liveDbs:  []*storageDb{live},
+		quit:     make(chan struct{}),
+		shutdown: make(chan struct{}),
 	}
 
 	go s.routineSizeCheck()
 	go s.routineScheduledTasks()
 
 	if s.config.IntervalWalCheckpointSec > 0 {
+		config.WalCheckpointMode = strings.ToUpper(config.WalCheckpointMode)
+		switch config.WalCheckpointMode {
+		case "PASSIVE":
+		case "FULL":
+		case "RESTART":
+		case "TRUNCATE":
+			break
+		default:
+			config.WalCheckpointMode = "TRUNCATE"
+		}
+
 		go s.routineWalCheckpoint()
 	}
 
@@ -153,8 +185,8 @@ func (s *storage) Flush(chunk *sqlog.Chunk) error {
 
 	var (
 		db         *storageDb
-		epochStart = chunk.First().Unix()
-		epochEnd   = chunk.Last().Unix()
+		epochStart = chunk.First()
+		epochEnd   = chunk.Last()
 	)
 	for _, d := range s.liveDbs {
 		if d.epochStart <= epochStart && (d.epochEnd == 0 || d.epochEnd >= epochEnd) {

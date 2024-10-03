@@ -28,20 +28,20 @@ func TestChunk_Init(t *testing.T) {
 
 func TestChunk_First(t *testing.T) {
 	chunk := NewChunk(2)
-	assert.Equal(t, time.Time{}.UTC(), chunk.First(), "Empty chunk should return zero time for First")
+	assert.Equal(t, int64(0), chunk.First(), "Empty chunk should return zero time for First")
 
 	entry := &Entry{Time: time.Now()}
 	chunk.Put(entry)
-	assert.Equal(t, entry.Time, chunk.First(), "Chunk with one entry should return the timestamp of the first entry")
+	assert.Equal(t, entry.Time.Unix(), chunk.First(), "Chunk with one entry should return the timestamp of the first entry")
 }
 
 func TestChunk_Last(t *testing.T) {
 	chunk := NewChunk(2)
-	assert.Equal(t, time.Time{}.UTC(), chunk.Last(), "Empty chunk should return zero time for Last")
+	assert.Equal(t, int64(0), chunk.Last(), "Empty chunk should return zero time for Last")
 
 	entry := &Entry{Time: time.Now()}
 	chunk.Put(entry)
-	assert.Equal(t, entry.Time, chunk.Last(), "Chunk with one entry should return the timestamp of the last entry")
+	assert.Equal(t, entry.Time.Unix(), chunk.Last(), "Chunk with one entry should return the timestamp of the last entry")
 }
 
 func TestChunk_TTL(t *testing.T) {

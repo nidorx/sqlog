@@ -31,10 +31,9 @@ var (
 	StorageSQLiteOptions = map[string]string{
 		"_journal_mode": "WAL",
 		"_synchronous":  "NORMAL",
-		"_cache_size":   "409600",
+		"_cache_size":   "409600", // 4MB
 	}
 
-	// @TODO: https://antonz.org/json-virtual-columns/
 	sqlCreateTable = `CREATE TABLE IF NOT EXISTS entries (
 		epoch_secs LONG,
 		nanos INTEGER,
@@ -57,16 +56,21 @@ const (
 )
 
 type storageDb struct {
-	file           string
-	status         int32
-	epochStart     int64
-	epochEnd       int64
-	size           int64
-	db             *sql.DB
-	live           bool     // É um banco de dados que está recebendo registro atualmente
-	lastQueryEpoch int64    // last time this storage was used
-	taskCount      int32    // last async id
-	taskMap        sync.Map //
+	mu             sync.Mutex // For checkpoint and flush only
+	live           bool       // Indicates this db is live, is receiving new logs
+	size           int64      // The size of this database (in bytes)
+	status         int32      // The connection status (closed, loading, open, closing, removing)
+	epochStart     int64      // The epoch of the oldest entry in this database (if present)
+	newEpochStart  int64      // Quando aceitamos um log antigo, devemos ajustar o nome do arquivo ao fechar o DB
+	epochEnd       int64      // The epoch of the newest entry in this database
+	lastQueryEpoch int64      // Last time this storage was used (query)
+	maxChunkAgeSec int64      //
+	fileDir        string     // Database dir
+	filePath       string     // Database filepath
+	filePrefix     string     // Database name prefix
+	db             *sql.DB    // Connection to the db
+	taskCount      int32      // Number of the scheduled tasks
+	taskMap        sync.Map   // All scheduled tasks
 }
 
 // schedule agenda a execuçao de uma query nessa instancia
@@ -78,6 +82,9 @@ func (s *storageDb) schedule(id int32, task *dbTask) {
 // cancel cancela um processamento asíncrono
 func (s *storageDb) cancel(id int32) bool {
 	_, loaded := s.taskMap.LoadAndDelete(id)
+	if loaded {
+		atomic.AddInt32(&s.taskCount, -1)
+	}
 	return loaded
 }
 
@@ -143,37 +150,6 @@ func (s *storageDb) updateSize() error {
 	return nil
 }
 
-func (s *storageDb) checkpoint() {
-	// s.db.Exec()
-	// sqlite3.Check
-	// numFrames, numFramesCheckpointed, err = c.db.Checkpoint(dbName, mode)
-	// Checkpoint calls sqlite3_wal_checkpoint_v2 on the underlying connection.
-	// switch mode {
-	// default:
-	// 	var buf [20]byte
-	// 	return "SQLITE_CHECKPOINT_UNKNOWN(" + string(itoa(buf[:], int64(mode))) + ")"
-	// case SQLITE_CHECKPOINT_PASSIVE:
-	// 	return "SQLITE_CHECKPOINT_PASSIVE"
-	// case SQLITE_CHECKPOINT_FULL:
-	// 	return "SQLITE_CHECKPOINT_FULL"
-	// case SQLITE_CHECKPOINT_RESTART:
-	// 	return "SQLITE_CHECKPOINT_RESTART"
-	// case SQLITE_CHECKPOINT_TRUNCATE:
-	// 	return "SQLITE_CHECKPOINT_TRUNCATE"
-	// }
-
-	// var cDB *C.char
-	// if dbName != "" {
-	// 	// Docs say: "If parameter zDb is NULL or points to a zero length string",
-	// 	// so they are equivalent here.
-	// 	cDB = C.CString(dbName)
-	// 	defer C.free(unsafe.Pointer(cDB))
-	// }
-	// var nLog, nCkpt C.int
-	// res := C.sqlite3_wal_checkpoint_v2(db.db, cDB, C.int(mode), &nLog, &nCkpt)
-	// return int(nLog), int(nCkpt), errCode(res)
-}
-
 func (s *storageDb) closeSafe() bool {
 	if s.lastQuerySec() < 2 {
 		return false
@@ -181,57 +157,17 @@ func (s *storageDb) closeSafe() bool {
 	return s.close()
 }
 
+// remove remove this db file
 func (s *storageDb) remove() {
 	if s.close() && atomic.CompareAndSwapInt32(&s.status, db_closed, db_removing) {
-		if err := os.Remove(s.file); err != nil {
+		if err := os.Remove(s.filePath); err != nil {
 			slog.Warn(
 				"[sqlog] error removing database",
-				slog.String("file", s.file),
+				slog.String("file", s.filePath),
 				slog.Any("error", err),
 			)
 		}
 	}
-}
-
-func (s *storageDb) close() bool {
-	if atomic.CompareAndSwapInt32(&s.status, db_open, db_closing) {
-
-		if s.live {
-			if err := s.vacuum(); err != nil {
-				slog.Warn(
-					"[sqlog] error vacuum database",
-					slog.String("file", s.file),
-					slog.Any("error", err),
-				)
-			}
-		}
-
-		s.db.Close()
-		s.db = nil
-
-		atomic.StoreInt32(&s.status, db_closed)
-	}
-	return atomic.LoadInt32(&s.status) == db_closed
-}
-
-// vacuum the database.
-func (s *storageDb) vacuum() error {
-	// Do a full vacuum of the live repository.  This
-	// should be fairly fast as it's deliberately size constrained.
-
-	// 1) maintain an in-memory operation-queue, so you can copy the DB when idle,
-	// vacuum as long as necessary on the copy, and then switch to the vacuumed copy
-	// after replaying the queue.
-	// (SQLite allows only a single writer, so statement-replay is safe, unlike
-	// concurrent-writer databases in some cases since you can't recreate the DB's
-	// row-visibility logic)
-	// https://news.ycombinator.com/item?id=23521079
-
-	// Use dbstat to find out what fraction of the pages in a database are sequential
-	// if there's a significant degree of fragmentation, then vacuum.
-	// https://www.sqlite.org/dbstat.html
-	_, err := s.db.Exec("VACUUM")
-	return err
 }
 
 // connect realiza a conexão com a base de dados
@@ -239,7 +175,7 @@ func (s *storageDb) connect(options map[string]string) error {
 	if atomic.CompareAndSwapInt32(&s.status, db_closed, db_loading) {
 
 		// file:test.db?cache=shared&mode=memory
-		connString := "file:" + s.file
+		connString := "file:" + s.filePath
 		if len(options) > 0 {
 			connString += "?"
 			i := 0
@@ -305,7 +241,7 @@ func (s *storageDb) flush(chunk *sqlog.Chunk) error {
 	sql := bytes.NewBuffer(make([]byte, 0, 1952))
 	sql.Write(sqlInsert)
 
-	epochEnd := s.epochEnd
+	maxChunkAge := s.epochStart - s.maxChunkAgeSec
 
 	for i, e := range chunk.List() {
 		if e == nil {
@@ -316,7 +252,9 @@ func (s *storageDb) flush(chunk *sqlog.Chunk) error {
 		}
 		sql.Write(sqlInsertValues)
 		epoch := e.Time.Unix()
-		epochEnd = max(epochEnd, epoch)
+		if epoch < maxChunkAge {
+			continue
+		}
 		values = append(values, epoch, e.Time.Nanosecond(), e.Level, e.Content)
 	}
 
@@ -325,6 +263,9 @@ func (s *storageDb) flush(chunk *sqlog.Chunk) error {
 		slog.Warn("[sqlog] trying to flush an empty chunk")
 		return nil
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if tx, err := s.db.Begin(); err != nil {
 		return err
@@ -338,22 +279,97 @@ func (s *storageDb) flush(chunk *sqlog.Chunk) error {
 	} else {
 		stmt.Close()
 		tx.Commit()
-		atomic.StoreInt64(&s.epochEnd, epochEnd)
+
+		s.epochEnd = max(chunk.Last(), s.epochEnd)
+		if chunkEpochStart := chunk.First(); chunkEpochStart < s.newEpochStart {
+			// db will renamed during close
+			s.newEpochStart = chunkEpochStart
+		}
 		return nil
 	}
 }
 
-func newDb(dir, prefix string, start time.Time) *storageDb {
+// See https://www.sqlite.org/wal.html#ckpt
+func (s *storageDb) checkpoint(mode string) {
+	if s.isOpen() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		// "PASSIVE", "FULL", "RESTART", "TRUNCATE"
+		// https://www.sqlite.org/pragma.html#pragma_wal_checkpoint
+		s.db.Exec("PRAGMA wal_checkpoint(?)", mode)
+	}
+}
+
+func (s *storageDb) close() bool {
+	if atomic.CompareAndSwapInt32(&s.status, db_open, db_closing) {
+
+		if s.live {
+			if err := s.vacuum(); err != nil {
+				slog.Warn(
+					"[sqlog] error vacuum database",
+					slog.String("path", s.filePath),
+					slog.Any("error", err),
+				)
+			}
+		}
+
+		s.db.Close()
+		s.db = nil
+
+		if s.newEpochStart < s.epochStart {
+			// need to rename DB
+			newPath := path.Join(s.fileDir, fmt.Sprintf("%s_%d.db", s.filePrefix, s.newEpochStart))
+			if err := os.Rename(s.filePath, newPath); err != nil {
+				slog.Warn(
+					"[sqlog] error renaming database",
+					slog.String("path", s.filePath),
+					slog.String("newpath", newPath),
+					slog.Any("error", err),
+				)
+			}
+		}
+
+		atomic.StoreInt32(&s.status, db_closed)
+	}
+	return atomic.LoadInt32(&s.status) == db_closed
+}
+
+// vacuum the database.
+func (s *storageDb) vacuum() error {
+	// Do a full vacuum of the live repository.  This
+	// should be fairly fast as it's deliberately size constrained.
+
+	// 1) maintain an in-memory operation-queue, so you can copy the DB when idle,
+	// vacuum as long as necessary on the copy, and then switch to the vacuumed copy
+	// after replaying the queue.
+	// (SQLite allows only a single writer, so statement-replay is safe, unlike
+	// concurrent-writer databases in some cases since you can't recreate the DB's
+	// row-visibility logic)
+	// https://news.ycombinator.com/item?id=23521079
+
+	// Use dbstat to find out what fraction of the pages in a database are sequential
+	// if there's a significant degree of fragmentation, then vacuum.
+	// https://www.sqlite.org/dbstat.html
+	_, err := s.db.Exec("VACUUM")
+	return err
+}
+
+func newDb(dir, prefix string, start time.Time, maxChunkAgeSec int64) *storageDb {
 
 	epochStart := start.Unix()
 	name := fmt.Sprintf("%s_%d.db", prefix, epochStart)
 
 	return &storageDb{
-		file:       path.Join(dir, name),
-		size:       0, // live db will updated during execution
-		status:     db_closed,
-		epochStart: epochStart,
-		epochEnd:   0,
+		fileDir:        dir,
+		filePath:       path.Join(dir, name),
+		filePrefix:     prefix,
+		size:           0, // live db will updated during execution
+		status:         db_closed,
+		epochStart:     epochStart,
+		newEpochStart:  epochStart,
+		maxChunkAgeSec: maxChunkAgeSec,
+		epochEnd:       0,
 	}
 }
 
@@ -385,18 +401,20 @@ func initDbs(dir, prefix string) (dbs []*storageDb, err error) {
 
 		epochStart, err = strconv.ParseInt(epochs[0], 10, 64)
 		if err != nil {
-			return errors.Join(errors.New("[sqlog] invalid database name ["+filepath+"]"), err)
+			slog.Warn("[sqlog] invalid database name", slog.String("filepath", filepath), slog.Any("err", err))
+			return nil
 		}
 
 		if len(epochs) > 1 {
 			epochEnd, err = strconv.ParseInt(epochs[1], 10, 64)
 			if err != nil {
-				return errors.Join(errors.New("[sqlog] invalid database name ["+filepath+"]"), err)
+				slog.Warn("[sqlog] invalid database name", slog.String("filepath", filepath), slog.Any("err", err))
+				return nil
 			}
 		}
 
 		dbs = append(dbs, &storageDb{
-			file:       path.Join(dir, name),
+			filePath:   path.Join(dir, name),
 			size:       info.Size(), // live db will updated during execution
 			status:     db_closed,
 			epochStart: epochStart,
@@ -410,10 +428,28 @@ func initDbs(dir, prefix string) (dbs []*storageDb, err error) {
 	}
 
 	if len(dbs) > 1 {
-		sort.SliceStable(dbs, func(i, j int) bool {
-			return dbs[i].epochStart < dbs[j].epochStart
-		})
+		sortDbs(dbs)
 	}
 
 	return
+}
+
+func sortDbs(dbs []*storageDb) {
+	sort.SliceStable(dbs, func(i, j int) bool {
+		ae := dbs[i].epochEnd
+		be := dbs[j].epochEnd
+		if ae == 0 && be == 0 {
+			return dbs[i].epochStart < dbs[j].epochStart
+		}
+
+		if be == 0 {
+			return true
+		}
+
+		if ae == 0 {
+			return false
+		}
+
+		return ae > be
+	})
 }

@@ -19,11 +19,11 @@ func (s *storage) routineSizeCheck() {
 			liveDb := s.liveDbs[len(s.liveDbs)-1]
 			if liveDb.size > int64(s.config.MaxFilesizeMB)*1000000 {
 				nextStart := time.Now().Add(time.Duration(s.config.IntervalSizeCheckSec * 2 * int32(time.Second)))
-				ndb := newDb(s.config.Dir, s.config.Prefix, nextStart)
+				ndb := newDb(s.config.Dir, s.config.Prefix, nextStart, s.config.MaxChunkAgeSec)
 				if err := ndb.connect(s.config.SQLiteOptions); err != nil {
 					slog.Warn(
 						"[sqlog] error creating live database",
-						slog.String("file", ndb.file),
+						slog.String("file", ndb.filePath),
 						slog.Any("error", err),
 					)
 				} else {

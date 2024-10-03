@@ -23,7 +23,7 @@ type IngesterConfig struct {
 	// O tamanho máximo em bytes desejado de um chunk.
 	//
 	// Se ultrapassar esse valor será enviado para o storage (default 0)
-	MaxChunkSizeMB int
+	MaxChunkSizeBytes int64
 
 	// A quantidade máxima de chunks com dados em memória (default 50)
 	//
@@ -34,7 +34,7 @@ type IngesterConfig struct {
 	MaxDirtyChunks int
 
 	// Tenta persistir um chunk quantas vezes em caso de falha (default 3)
-	MaxFlushRetry uint8
+	MaxFlushRetry int
 
 	// Se o Chunk atual ficar inativo por esse tempo, envia para
 	// o Storage (default 3 segundos)
@@ -96,6 +96,8 @@ func NewIngester(config *IngesterConfig, storage Storage) (*Ingester, error) {
 		flushChunk:   root,
 		writeChunk:   root,
 		storage:      storage,
+		quit:         make(chan struct{}),
+		shutdown:     make(chan struct{}),
 	}
 
 	go i.routineCheck()
@@ -126,49 +128,7 @@ func (i *Ingester) routineCheck() {
 
 		case <-tick.C:
 
-			for {
-				chunk := i.flushChunk
-				if chunk.Empty() {
-					break
-				}
-
-				if chunk.Ready() {
-					if err := i.storage.Flush(chunk); err != nil {
-						chunk.retries++
-						slog.Error("[sqlog] error writing chunk", slog.Any("error", err))
-
-						if chunk.retries > uint(i.config.MaxFlushRetry) {
-							chunk.Init(i.config.Chunks + 1)
-						} else {
-							break
-						}
-					} else {
-						chunk.Init(i.config.Chunks + 1)
-					}
-				} else {
-					if int(chunk.TTL().Seconds()) > i.config.FlushAfterSec ||
-						(i.config.MaxChunkSizeMB > 0 && chunk.Size() > int64(i.config.MaxChunkSizeMB)*1000000) {
-						// bloqueia a escrita no chunk para que possa ser persistido na próxima execuçao
-						chunk.Lock()
-						chunk.Init(i.config.Chunks)
-					}
-					break
-				}
-				i.flushChunk = i.flushChunk.Next()
-			}
-
-			// limita consumo de memória
-			if !i.flushChunk.Empty() && i.flushChunk.Depth() > i.config.MaxDirtyChunks {
-				for {
-					if i.flushChunk.Depth() > i.config.MaxDirtyChunks {
-						i.flushChunk = i.flushChunk.Next()
-					} else {
-						break
-					}
-				}
-				i.flushChunk.Init(i.config.Chunks)
-			}
-
+			i.doRoutineCheck()
 			tick.Reset(d)
 
 		case <-i.quit:
@@ -179,21 +139,44 @@ func (i *Ingester) routineCheck() {
 			chunk := i.flushChunk
 			chunk.Lock()
 
+			t := 0
+
 			for {
 				if chunk.Empty() {
 					break
 				}
 
 				if chunk.Ready() {
-					// write
-					i.storage.Flush(chunk)
-					chunk = chunk.Next()
-					chunk.Lock()
+					if err := i.storage.Flush(chunk); err != nil {
+						chunk.retries++
+						slog.Error("[sqlog] error writing chunk", slog.Any("error", err))
+
+						if chunk.retries > i.config.MaxFlushRetry {
+							chunk = chunk.Next()
+							chunk.Lock()
+						} else {
+							time.Sleep(10 * time.Millisecond)
+						}
+					} else {
+						chunk = chunk.Next()
+						chunk.Lock()
+					}
 				} else {
-					// aguarda para persistir esse chunk
-					time.Sleep(10 * time.Millisecond)
+					// should never happen (maybe single-event upset (SEU) :) )
+					// see chunk.Ready() and chunk.Put()
+					t++
+					if t > 3 {
+						chunk = chunk.Next()
+						chunk.Lock()
+						continue
+					}
+					t = 0
+					chunk.Lock()
+					time.Sleep(2 * time.Millisecond)
 				}
 			}
+
+			i.flushChunk = chunk
 
 			if err := i.storage.Close(); err != nil {
 				slog.Warn(
@@ -207,12 +190,59 @@ func (i *Ingester) routineCheck() {
 	}
 }
 
+func (i *Ingester) doRoutineCheck() {
+	for {
+		chunk := i.flushChunk
+		if chunk.Empty() {
+			break
+		}
+
+		if chunk.Ready() {
+			if err := i.storage.Flush(chunk); err != nil {
+				chunk.retries++
+				slog.Error("[sqlog] error writing chunk", slog.Any("error", err))
+
+				if chunk.retries > i.config.MaxFlushRetry {
+					chunk.Init(i.config.Chunks + 1)
+				} else {
+					break
+				}
+			} else {
+				chunk.Init(i.config.Chunks + 1)
+			}
+		} else {
+			if int(chunk.TTL().Seconds()) > i.config.FlushAfterSec {
+				chunk.Lock() // bloqueia a escrita no chunk para que possa ser persistido na próxima execuçao
+				chunk.Init(i.config.Chunks)
+			} else if i.config.MaxChunkSizeBytes > 0 && chunk.Size() > i.config.MaxChunkSizeBytes {
+				chunk.Lock() // bloqueia a escrita no chunk para que possa ser persistido na próxima execuçao
+				chunk.Init(i.config.Chunks)
+			}
+			break
+		}
+		i.flushChunk = i.flushChunk.Next()
+	}
+
+	// limita consumo de memória
+	if !i.flushChunk.Empty() && i.flushChunk.Depth() > i.config.MaxDirtyChunks {
+		for {
+			if i.flushChunk.Depth() > i.config.MaxDirtyChunks {
+				i.flushChunk = i.flushChunk.Next()
+			} else {
+				break
+			}
+		}
+		i.flushChunk.Init(i.config.Chunks)
+	}
+
+}
+
 // Close faz o flush dos dados pendentes e fecha o storage
 func (i *Ingester) Close() (err error) {
 	defer func() {
 		// Always recover, a panic could be raised if `c`.quit was closed which
 		// means the method was called more than once.
-		if recover() != nil {
+		if rec := recover(); rec != nil {
 			err = ErrIngesterClosed
 		}
 	}()

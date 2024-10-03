@@ -4,6 +4,7 @@ import (
 	"time"
 )
 
+// See https://www.sqlite.org/wal.html#ckpt
 func (s *storage) routineWalCheckpoint() {
 	d := time.Duration(s.config.IntervalWalCheckpointSec) * time.Second
 	tick := time.NewTicker(d)
@@ -15,7 +16,7 @@ func (s *storage) routineWalCheckpoint() {
 		case <-tick.C:
 			for _, db := range s.liveDbs {
 				if db.isOpen() {
-					db.checkpoint()
+					db.checkpoint(s.config.WalCheckpointMode)
 				}
 			}
 

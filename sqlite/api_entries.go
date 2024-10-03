@@ -107,7 +107,6 @@ func (s *storage) Entries(input *sqlog.EntriesInput) (*sqlog.Output, error) {
 		sql  = buf.String()
 		list = []any{}
 		dbs  []*storageDb
-		// closedDbs []*storageDb
 	)
 
 	//fmt.Printf("[sqlog] Entries\nSQL: %s\n\nARG: %v\n", sql, args) // debug
@@ -145,40 +144,59 @@ func (s *storage) Entries(input *sqlog.EntriesInput) (*sqlog.Output, error) {
 
 	for _, db := range dbs {
 		if db.isOpen() {
-			stm, rows, err := db.query(sql, args)
-			if err != nil {
+			if ll, err := listEntries(db, sql, args); err != nil {
 				return nil, err
+			} else {
+				list = append(list, ll...)
 			}
-
-			for rows.Next() {
-				var (
-					epoch   int64
-					nanos   int
-					level   int
-					content string
-				)
-
-				if err = rows.Scan(&epoch, &nanos, &level, &content); err != nil {
-					rows.Close()
-					stm.Close()
-					return nil, err
-				}
-
-				list = append(list, []any{epoch, nanos, level, content})
-			}
-
-			rows.Close()
-			stm.Close()
 
 			if len(list) >= maxResult {
 				break
 			}
 		} else {
-			// @TODO: schedule and break
+			// schedule more result
+			out.Scheduled = true
+			out.TaskIds = s.schedule([]*storageDb{db}, func(db *storageDb, o *sqlog.Output) error {
+				if list, err := listEntries(db, sql, args); err != nil {
+					return err
+				} else {
+					o.Entries = list
+					return nil
+				}
+			})
 			break
 		}
 	}
 
 	out.Entries = list
 	return out, nil
+}
+
+func listEntries(db *storageDb, sql string, args []any) ([]any, error) {
+	var list []any
+
+	stm, rows, err := db.query(sql, args)
+	if err != nil {
+		return nil, err
+	}
+	defer stm.Close()
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			epoch   int64
+			nanos   int
+			level   int
+			content string
+		)
+		if err = rows.Scan(&epoch, &nanos, &level, &content); err != nil {
+			rows.Close()
+			stm.Close()
+			return nil, err
+		}
+
+		list = append(list, []any{epoch, nanos, level, content})
+	}
+
+	return list, nil
 }

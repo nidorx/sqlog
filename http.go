@@ -45,6 +45,8 @@ func (l *sqlog) HttpHandler() http.Handler {
 				l.ServeHTTPTicks(w, r)
 			case "entries":
 				l.ServeHTTPEntries(w, r)
+			case "result":
+				l.ServeHTTPResult(w, r)
 			}
 		} else {
 			switch path.Ext(p) {
@@ -103,15 +105,33 @@ func (l *sqlog) ServeHTTPEntries(w http.ResponseWriter, r *http.Request) {
 	sendJson(w, entries, err)
 }
 
+// ServeHTTPResult scheduled result api.
+func (l *sqlog) ServeHTTPResult(w http.ResponseWriter, r *http.Request) {
+	var q = r.URL.Query()
+	result, err := l.Result(getInt32(q, "id"))
+	sendJson(w, result, err)
+}
+
+// ServeHTTPResult scheduled result api.
+func (l *sqlog) ServeHTTPCancel(w http.ResponseWriter, r *http.Request) {
+	var q = r.URL.Query()
+	err := l.Cancel(getInt32(q, "id"))
+	sendJson(w, nil, err)
+}
+
 func sendJson(w http.ResponseWriter, data any, err error) {
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
-		w.WriteHeader(400)
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]any{
 			"error": err.Error(),
 		})
 	} else {
-		json.NewEncoder(w).Encode(data)
+		if data != nil {
+			json.NewEncoder(w).Encode(data)
+		} else {
+			w.WriteHeader(http.StatusNoContent)
+		}
 	}
 }
 
@@ -123,4 +143,9 @@ func getInt(q url.Values, key string) int {
 func getInt64(q url.Values, key string) int64 {
 	v, _ := strconv.ParseInt(q.Get(key), 10, 64)
 	return v
+}
+
+func getInt32(q url.Values, key string) int32 {
+	v, _ := strconv.ParseInt(q.Get(key), 10, 32)
+	return int32(v)
 }

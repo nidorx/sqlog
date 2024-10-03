@@ -11,6 +11,8 @@ type StorageWithApi interface {
 	Storage
 	Ticks(input *TicksInput) (*Output, error)
 	Entries(input *EntriesInput) (*Output, error)
+	Result(taskId int32) (*Output, error)
+	Cancel(taskId int32) error
 }
 
 type DummyStorage struct {

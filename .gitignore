@@ -1,4 +1,6 @@
 
 
 *.exe
+*.db
+**/*.db
 demo/logs
