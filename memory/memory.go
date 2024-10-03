@@ -34,9 +34,6 @@ func (s *MemoryStorage) Close() error {
 	return nil
 }
 
-// Ticks(input *TicksInput) (*Output, error)
-// 	Entries(input *EntriesInput) (*Output, error)
-
 func (s *MemoryStorage) Ticks(input *sqlog.TicksInput) (*sqlog.Output, error) {
 	return nil, nil
 }

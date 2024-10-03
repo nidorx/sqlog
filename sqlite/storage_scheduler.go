@@ -9,20 +9,22 @@ import (
 )
 
 const (
-	task_created int32 = iota
-	task_process
-	task_finished
-	task_canceled
+	task_created  int32 = iota // Task has been created
+	task_process               // Task is being processed
+	task_finished              // Task has been completed
+	task_canceled              // Task has been canceled
 )
 
 type dbTask struct {
-	db       *storageDb
-	state    int32 // 0=created, 1=process, 2=finished, 3=canceled
-	output   *sqlog.Output
-	callback func(*storageDb, *sqlog.Output) error
+	db       *storageDb                            // Reference to the storage database associated with the task
+	state    int32                                 // Task state: 0=created, 1=processing, 2=finished, 3=canceled
+	output   *sqlog.Output                         // Output of the task
+	callback func(*storageDb, *sqlog.Output) error // Callback function to execute the task logic
 }
 
-// Result obtém o resultado de um processamento asíncrono
+// Result retrieves the result of an asynchronous task processing.
+// If the task has finished or has been canceled, it returns the task output and removes the task from taskMap.
+// Otherwise, it returns a status indicating that the task is still scheduled.
 func (s *storage) Result(taskId int32) (*sqlog.Output, error) {
 	if v, loaded := s.taskMap.Load(taskId); loaded {
 		task := v.(*dbTask)
@@ -36,7 +38,7 @@ func (s *storage) Result(taskId int32) (*sqlog.Output, error) {
 	return nil, nil
 }
 
-// Cancel cancela um processamento asíncrono
+// Cancel aborts an asynchronous task processing.
 func (s *storage) Cancel(taskId int32) error {
 	if v, loaded := s.taskMap.Load(taskId); loaded {
 		task := v.(*dbTask)
@@ -47,7 +49,8 @@ func (s *storage) Cancel(taskId int32) error {
 	return nil
 }
 
-// schedule agenda a execução do callback para ser executado em cada db da lista
+// schedule creates and schedules a task for each database in the list.
+// The provided callback will be executed for each scheduled task.
 func (s *storage) schedule(dbs []*storageDb, callback func(*storageDb, *sqlog.Output) error) (taskIds []int32) {
 	for _, db := range dbs {
 		id := atomic.AddInt32(&s.taskIdSeq, 1)
@@ -59,7 +62,8 @@ func (s *storage) schedule(dbs []*storageDb, callback func(*storageDb, *sqlog.Ou
 	return
 }
 
-// routineScheduledTasks gerenciamentoo de tarefas agendadas no storage
+// routineScheduledTasks manages the scheduled tasks processing loop.
+// It runs on a separate goroutine, executing tasks at regular intervals.
 func (s *storage) routineScheduledTasks() {
 	defer close(s.shutdown)
 
@@ -80,6 +84,9 @@ func (s *storage) routineScheduledTasks() {
 	}
 }
 
+// doRoutineScheduledTasks processes tasks in the databases.
+// It also manages the lifecycle of databases by closing idle ones
+// and ensuring the right number of databases are open.
 func (s *storage) doRoutineScheduledTasks() {
 	var (
 		totalTasks      int32
@@ -89,6 +96,7 @@ func (s *storage) doRoutineScheduledTasks() {
 		closedWithTasks []*storageDb
 	)
 
+	// Gather information about tasks and databases
 	for _, db := range s.dbs {
 		tasks := db.tasks()
 		totalTasks += tasks
@@ -106,10 +114,10 @@ func (s *storage) doRoutineScheduledTasks() {
 
 	closedAnyDb := false
 
-	// executa algumas tasks nos banco de dados já abertos
+	// Process tasks in the currently open databases
 	if totalTasks > 0 {
 
-		// maximo de goroutines que pode ser criada no momento
+		// Maximum number of tasks that can be processed in parallel
 		qtMaxTasks := s.config.MaxRunningTasks - s.numActiveTasks
 		if qtMaxTasks > 0 {
 
@@ -133,7 +141,7 @@ func (s *storage) doRoutineScheduledTasks() {
 		}
 	}
 
-	// fecha banco de dados idle
+	// Close idle databases
 	for _, db := range s.dbs {
 		if !db.live && db.lastQuerySec() > s.config.CloseIdleSec && db.closeSafe() {
 			totalOpen--
@@ -141,10 +149,10 @@ func (s *storage) doRoutineScheduledTasks() {
 		}
 	}
 
-	// busca manter o limite de banco de dados abertos (sem levar em consideraçao CloseIdleSec)
+	// Ensure the number of open databases is within the limit
 	if totalOpen > s.config.MaxOpenedDB {
 
-		// fecha banco de dados que não estão ativos
+		// Close databases that have no tasks
 		for _, db := range openWithoutTask {
 			if totalOpen > s.config.MaxOpenedDB {
 				if !db.live && db.closeSafe() {
@@ -154,7 +162,7 @@ func (s *storage) doRoutineScheduledTasks() {
 			}
 		}
 
-		// fecha os banco de dados com menor número de task
+		// Close databases with the fewest tasks
 		if totalOpen > s.config.MaxOpenedDB {
 			sort.SliceStable(openWithTasks, func(i, j int) bool {
 				return openWithTasks[i].tasks() < openWithTasks[j].tasks()
@@ -170,21 +178,21 @@ func (s *storage) doRoutineScheduledTasks() {
 		}
 	}
 
-	// conecta banco de dados que possuem tarefas ativas e estão fechados
+	// Open closed databases that have pending tasks
 	if len(closedWithTasks) > 0 {
 		sort.SliceStable(closedWithTasks, func(i, j int) bool {
 			return closedWithTasks[i].tasks() < closedWithTasks[j].tasks()
 		})
 
 		if totalOpen > s.config.MaxOpenedDB {
-			// abre o banco de dados com o menor número de tarefas (apenas um, para evitar starvation)
+			// Open the database with the fewest tasks
 			for _, db := range closedWithTasks {
 				if err := db.connect(s.config.SQLiteOptions); err == nil {
 					break
 				}
 			}
 		} else {
-			// abre o máximo de banco de dados permitido
+			// Open as many databases as allowed
 			for _, db := range closedWithTasks {
 				if totalOpen > s.config.MaxOpenedDB {
 					break
@@ -196,8 +204,8 @@ func (s *storage) doRoutineScheduledTasks() {
 		}
 	}
 
+	// If any database was closed, re-sort the database lists
 	if closedAnyDb {
-		//
 		s.mu.Lock()
 		sortDbs(s.dbs)
 		sortDbs(s.liveDbs)
@@ -205,6 +213,8 @@ func (s *storage) doRoutineScheduledTasks() {
 	}
 }
 
+// executeDbTasks executes a set number of tasks for the given database.
+// Tasks are executed asynchronously, and the task completion is managed via the onTask callback.
 func (s *storage) executeDbTasks(db *storageDb, maxForThisDb int32, onTask func(taskId int32, complete bool)) {
 	i := int32(0)
 	db.execute(func(id int32, task *dbTask) (stops bool) {
@@ -223,9 +233,9 @@ func (s *storage) executeDbTasks(db *storageDb, maxForThisDb int32, onTask func(
 			}
 
 			if !db.isOpen() {
-				// banco de dados fechou nesse intervalo
+				// If the database closed during the task execution
 				if atomic.CompareAndSwapInt32(&task.state, task_process, task_created) {
-					db.schedule(id, task) // agenda novamente a execução
+					db.schedule(id, task) // Reschedule the task
 				}
 				onTask(id, true)
 				return
@@ -233,9 +243,9 @@ func (s *storage) executeDbTasks(db *storageDb, maxForThisDb int32, onTask func(
 
 			if err := task.callback(db, task.output); err != nil {
 				if !db.isOpen() {
-					// banco de dados fechou nesse intervalo
+					// If the database closed during task execution
 					if atomic.CompareAndSwapInt32(&task.state, task_process, task_created) {
-						db.schedule(id, task) // agenda novamente a execução
+						db.schedule(id, task) // Reschedule the task
 					}
 					onTask(id, true)
 					return

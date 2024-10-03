@@ -12,78 +12,79 @@ import (
 )
 
 type Config struct {
-	Dir           string            // Database folder (default "./logs")
-	Prefix        string            // Database name prefix (default "sqlog")
-	SQLiteOptions map[string]string // https://github.com/mattn/go-sqlite3?tab=readme-ov-file#connection-string
+	Dir           string            // Directory for the database files (default "./logs")
+	Prefix        string            // Prefix for the database name (default "sqlog")
+	SQLiteOptions map[string]string // SQLite connection string options (https://github.com/mattn/go-sqlite3#connection-string)
 
-	// Permite definir um processador de expressões personalizado
+	// Allows defining a custom expression processor.
 	ExprBuilder func(expression string) (*Expr, error)
 
-	// Permite que o banco um banco de dados aceite logs antigos
-	// Isso pode ser útil em processos de migração de logs ou
-	// para permitir o recebimento de logs atrasados de alguma
-	// integraçao (Default 3600 = 1h)
+	// Allows the database to accept older logs.
+	// Useful for log migration or receiving delayed logs from integrations.
+	// (Default: 3600 seconds = 1 hour)
 	//
-	// @TODO: Implementar solução para que o storage possa fazer
-	// a movimentação de logs para o intervalo correto
+	// @TODO: Implement a solution to enable moving logs to the correct time range.
 	MaxChunkAgeSec int64
 
-	// Each time the current log file reaches MaxFilesize,
-	// it will be archived (default 20).
+	// When the current log file reaches this size (in MB), it will be archived.
+	// (Default: 20MB).
 	MaxFilesizeMB int32
 
-	// The total size of all archive files. Oldest archives
-	// are deleted asynchronously when the total size cap
-	// is exceeded (default 1000).
+	// The total size of all archived files. Once this cap is exceeded,
+	// the oldest archive files will be deleted asynchronously.
+	// (Default: 1000MB).
 	TotalSizeCapMB int32
 
-	// Quantidade máxima de banco de dados abertos
-	// simultaneamente
+	// The maximum number of databases that can be opened simultaneously.
 	MaxOpenedDB int32
 
-	// Numero máximo de goroutines que serão disparados
-	// para executar processamento agendado (default 200)
+	// The maximum number of goroutines for scheduled task processing.
+	// (Default: 200).
 	MaxRunningTasks int32
 
-	// Fecha banco de dados que estão inativos (default 30)
+	// Time (in seconds) before closing idle databases.
+	// (Default: 30 seconds).
 	CloseIdleSec int64
 
-	// Intervalo de manutençao do storage em segundos (default 5)
+	// Interval (in seconds) for storage maintenance checks.
+	// (Default: 5 seconds).
 	IntervalSizeCheckSec int32
 
-	// Intervalo de manutenção das tarefas em milisegundos (default 100)
+	// Interval (in milliseconds) for scheduled task maintenance.
+	// (Default: 100ms).
 	IntervalScheduledTasksMs int32
 
-	// Intervalo para executar o CHECKPOINT do WAL (default 9)
-	// Defina valor <= 0 para desabilitar
+	// Interval (in seconds) to execute a WAL checkpoint.
+	// Set to 0 or less to disable.
 	//
 	// See https://www.sqlite.org/wal.html#ckpt
 	IntervalWalCheckpointSec int32
 
-	// PASSIVE, FULL, RESTART, TRUNCATE (default to TRUNCATE)
+	// WAL checkpoint modes: PASSIVE, FULL, RESTART, or TRUNCATE.
+	// (Default: TRUNCATE).
 	//
 	// See https://www.sqlite.org/wal.html#ckpt
 	WalCheckpointMode string
 }
 
-// storage connection to a sqlite database
-// https://ferrous-systems.com/blog/lock-free-ring-buffer/
+// Storage represents a connection to a SQLite database.
+// Reference: https://ferrous-systems.com/blog/lock-free-ring-buffer/
 type storage struct {
 	sqlog.Storage
 	sqlog.StorageWithApi
 	mu             sync.Mutex
-	dbs            []*storageDb // todos os banco de dados desse storage
-	liveDbs        []*storageDb // os banco de dados que ainda estão salvando dados
+	dbs            []*storageDb // All databases managed by this storage
+	liveDbs        []*storageDb // Currently active databases receiving logs
 	config         *Config      //
-	taskIdSeq      int32        // last task id
-	taskMap        sync.Map     // saída da execução
-	numActiveTasks int32        // registro das goroutines criadas para executar tarefas agendadas
+	taskIdSeq      int32        // Last task ID
+	taskMap        sync.Map     // Stores task execution outputs
+	numActiveTasks int32        // Tracks the number of active goroutines for scheduled tasks
 	quit           chan struct{}
 	shutdown       chan struct{}
 }
 
+// New initializes a new storage instance.
 func New(config *Config) (*storage, error) {
-
 	if config == nil {
 		config = &Config{}
 	}
@@ -144,7 +145,7 @@ func New(config *Config) (*storage, error) {
 		dbs = append(dbs, newDb(config.Dir, config.Prefix, time.Now(), config.MaxChunkAgeSec))
 	}
 
-	// init live live
+	// Initialize the active database (live)
 	live := dbs[len(dbs)-1]
 	if err := live.connect(config.SQLiteOptions); err != nil {
 		return nil, errors.Join(errors.New("[sqlog] unable to start live db"), err)
@@ -165,11 +166,7 @@ func New(config *Config) (*storage, error) {
 	if s.config.IntervalWalCheckpointSec > 0 {
 		config.WalCheckpointMode = strings.ToUpper(config.WalCheckpointMode)
 		switch config.WalCheckpointMode {
-		case "PASSIVE":
-		case "FULL":
-		case "RESTART":
-		case "TRUNCATE":
-			break
+		case "PASSIVE", "FULL", "RESTART", "TRUNCATE":
 		default:
 			config.WalCheckpointMode = "TRUNCATE"
 		}
@@ -182,7 +179,6 @@ func New(config *Config) (*storage, error) {
 
 // Flush saves the chunk records to the current live database.
 func (s *storage) Flush(chunk *sqlog.Chunk) error {
-
 	var (
 		db         *storageDb
 		epochStart = chunk.First()
@@ -199,13 +195,14 @@ func (s *storage) Flush(chunk *sqlog.Chunk) error {
 	}
 
 	if !db.isOpen() {
-		// should not happen
+		// Should not happen
 		return errors.New("db is closed")
 	}
 
 	return db.flush(chunk)
 }
 
+// Close closes all databases and cleans up.
 func (s *storage) Close() error {
 	for _, db := range s.dbs {
 		db.close()

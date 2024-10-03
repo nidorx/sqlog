@@ -9,7 +9,12 @@ type Storage interface {
 // StorageWithApi contract for storage that allows search
 type StorageWithApi interface {
 	Storage
+
+	// Fetches information about all series within the range.
 	Ticks(input *TicksInput) (*Output, error)
+
+	// Fetches a page of results (seek method or keyset pagination).
+	// The sorting is reversed, with the oldest result coming first.
 	Entries(input *EntriesInput) (*Output, error)
 	Result(taskId int32) (*Output, error)
 	Cancel(taskId int32) error

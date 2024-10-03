@@ -30,7 +30,6 @@ var (
 	sqlTicksEnd = []byte(`GROUP BY c.epoch_start, c.epoch_end`)
 )
 
-// listTicks obtém as informações sobre todas as séries no intervalo
 func (s *storage) Ticks(input *sqlog.TicksInput) (*sqlog.Output, error) {
 
 	var (

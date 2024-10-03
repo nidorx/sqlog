@@ -20,7 +20,7 @@ import (
 )
 
 var (
-
+	// SQLite performance optimizations and tips
 	// https://sqlite.org/forum/forum
 	// https://www.powersync.com/blog/sqlite-optimizations-for-ultra-high-performance
 	// https://phiresky.github.io/blog/2020/sqlite-performance-tuning/
@@ -29,8 +29,8 @@ var (
 	// https://wiki.mozilla.org/Performance/Avoid_SQLite_In_Your_Next_Firefox_Feature
 	// https://www.deconstructconf.com/2019/dan-luu-files
 	StorageSQLiteOptions = map[string]string{
-		"_journal_mode": "WAL",
-		"_synchronous":  "NORMAL",
+		"_journal_mode": "WAL",    // Write-ahead logging for better performance
+		"_synchronous":  "NORMAL", // Balance between performance and safety
 		"_cache_size":   "409600", // 4MB
 	}
 
@@ -48,38 +48,38 @@ var (
 )
 
 const (
-	db_closed   int32 = iota // The database is closed
+	db_closed   int32 = iota // Database is closed
 	db_loading               // Initializing the database
-	db_open                  // The database is open
+	db_open                  // Database is open
 	db_closing               // Closing the database
 	db_removing              // Removing the database
 )
 
 type storageDb struct {
-	mu             sync.Mutex // For checkpoint and flush only
-	live           bool       // Indicates this db is live, is receiving new logs
-	size           int64      // The size of this database (in bytes)
-	status         int32      // The connection status (closed, loading, open, closing, removing)
-	epochStart     int64      // The epoch of the oldest entry in this database (if present)
-	newEpochStart  int64      // Quando aceitamos um log antigo, devemos ajustar o nome do arquivo ao fechar o DB
-	epochEnd       int64      // The epoch of the newest entry in this database
-	lastQueryEpoch int64      // Last time this storage was used (query)
-	maxChunkAgeSec int64      //
-	fileDir        string     // Database dir
-	filePath       string     // Database filepath
-	filePrefix     string     // Database name prefix
-	db             *sql.DB    // Connection to the db
-	taskCount      int32      // Number of the scheduled tasks
-	taskMap        sync.Map   // All scheduled tasks
+	mu             sync.Mutex // Mutex for checkpoint and flush operations
+	live           bool       // Indicates if the database is live and receiving logs
+	size           int64      // Size of the database in bytes
+	status         int32      // Connection status (closed, loading, open, closing, removing)
+	epochStart     int64      // Epoch of the oldest entry in this database
+	newEpochStart  int64      // When accepting an old log, adjust file name when closing the DB
+	epochEnd       int64      // Epoch of the newest entry in this database
+	lastQueryEpoch int64      // Last usage timestamp of this storage (query)
+	maxChunkAgeSec int64      // Maximum allowed chunk age
+	fileDir        string     // Directory of the database file
+	filePath       string     // Path to the database file
+	filePrefix     string     // Prefix for the database file name
+	db             *sql.DB    // SQLite connection object
+	taskCount      int32      // Number of scheduled tasks
+	taskMap        sync.Map   // Map of scheduled tasks
 }
 
-// schedule agenda a execuçao de uma query nessa instancia
+// schedule schedules a query execution on this instance
 func (s *storageDb) schedule(id int32, task *dbTask) {
 	s.taskMap.Store(id, task)
 	atomic.AddInt32(&s.taskCount, 1)
 }
 
-// cancel cancela um processamento asíncrono
+// cancel cancels an asynchronous process
 func (s *storageDb) cancel(id int32) bool {
 	_, loaded := s.taskMap.LoadAndDelete(id)
 	if loaded {
@@ -88,7 +88,7 @@ func (s *storageDb) cancel(id int32) bool {
 	return loaded
 }
 
-// tasks obtém o número de consultas agendadas para esse banco
+// tasks returns the number of scheduled queries for this database
 func (s *storageDb) tasks() int32 {
 	return s.taskCount
 }
@@ -109,16 +109,17 @@ func (s *storageDb) execute(f func(id int32, task *dbTask) bool) {
 	})
 }
 
+// isOpen checks if the database is open
 func (s *storageDb) isOpen() bool {
 	return atomic.LoadInt32(&s.status) == db_open
 }
 
-// lastSecs tempo decorrido desde a ultima utilização desse db
+// lastQuerySec returns the time elapsed since the last use of this database
 func (s *storageDb) lastQuerySec() int64 {
 	return time.Now().Unix() - s.lastQueryEpoch
 }
 
-// updateSize
+// updateSize updates the size of the database
 // https://til.simonwillison.net/sqlite/database-file-size
 // https://www.powersync.com/blog/sqlite-optimizations-for-ultra-high-performance
 func (s *storageDb) updateSize() error {
@@ -150,6 +151,7 @@ func (s *storageDb) updateSize() error {
 	return nil
 }
 
+// closeSafe checks if the database can be safely closed
 func (s *storageDb) closeSafe() bool {
 	if s.lastQuerySec() < 2 {
 		return false
@@ -157,7 +159,7 @@ func (s *storageDb) closeSafe() bool {
 	return s.close()
 }
 
-// remove remove this db file
+// remove deletes the database file
 func (s *storageDb) remove() {
 	if s.close() && atomic.CompareAndSwapInt32(&s.status, db_closed, db_removing) {
 		if err := os.Remove(s.filePath); err != nil {
@@ -170,7 +172,7 @@ func (s *storageDb) remove() {
 	}
 }
 
-// connect realiza a conexão com a base de dados
+// connect establishes the connection to the database
 func (s *storageDb) connect(options map[string]string) error {
 	if atomic.CompareAndSwapInt32(&s.status, db_closed, db_loading) {
 
@@ -213,6 +215,7 @@ func (s *storageDb) connect(options map[string]string) error {
 	return nil
 }
 
+// query prepares and executes a query on the database
 func (s *storageDb) query(sql string, args []any) (*sql.Stmt, *sql.Rows, error) {
 	if s.db == nil {
 		return nil, nil, errors.New("db is closed")
@@ -234,7 +237,7 @@ func (s *storageDb) query(sql string, args []any) (*sql.Stmt, *sql.Rows, error) 
 	return stm, rows, nil
 }
 
-// flush saves the chunk records to this database.
+// flush saves the chunk records to this database
 func (s *storageDb) flush(chunk *sqlog.Chunk) error {
 	values := []any{}
 

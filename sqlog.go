@@ -61,7 +61,7 @@ type sqlog struct {
 	config   *Config
 	handler  *handler
 	storage  Storage
-	ingester *Ingester
+	ingester *ingester
 }
 
 func New(config *Config) (*sqlog, error) {

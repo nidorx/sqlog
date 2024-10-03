@@ -148,7 +148,7 @@ func NewExprBuilder[E any](factory ExprBuilderFactory[E]) func(expression string
 					s.buf.Reset()
 				}
 			} else {
-				// salva no buffer
+				// save buffer
 				s.buf.WriteByte(b)
 			}
 		}

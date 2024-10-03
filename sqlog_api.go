@@ -23,7 +23,7 @@ type EntriesInput struct {
 	Expr       string   `json:"expr"`
 	Level      []string `json:"level"` // ["debug","info","warn","error"]
 	Direction  string   `json:"dir"`   // before|after
-	EpochStart int64    `json:"epoch"`
+	EpochStart int64    `json:"epoch"` // @TODO: add epochMax
 	NanosStart int      `json:"nanos"`
 	MaxResult  int      `json:"limit"`
 }

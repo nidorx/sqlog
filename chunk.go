@@ -6,8 +6,6 @@ import (
 	"time"
 )
 
-// var epoch = time.Time{}.UTC()
-
 // Entry represents a formatted log entry
 type Entry struct {
 	Time    time.Time

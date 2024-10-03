@@ -7,58 +7,67 @@ import (
 	"time"
 )
 
-// ErrIngesterClosed This error is returned by methods of the `Client` interface when they are
-// called after the Ingester was already closed.
+// ErrIngesterClosed is returned by methods of the `Client` interface
+// when they are called after the Ingester has already been closed.
 var ErrIngesterClosed = errors.New("[sqlog] the ingester was already closed")
 
+// IngesterConfig contains configuration parameters for the ingester.
 type IngesterConfig struct {
-
-	// Tamnho do buffer de chunks (default 3)
+	// Chunks is the size of the chunk buffer (default 3).
 	Chunks uint8
 
-	// Quantidade máxima desejada de registros por chunk, antes de
-	// persistir no storage (default|max 900)
+	// ChunkSize defines the maximum number of log records per chunk before
+	// being persisted in storage (default|max 900).
 	ChunkSize uint16
 
-	// O tamanho máximo em bytes desejado de um chunk.
-	//
-	// Se ultrapassar esse valor será enviado para o storage (default 0)
+	// MaxChunkSizeBytes sets the maximum desired chunk size in bytes.
+	// If this size is exceeded, the chunk will be sent to storage (default 0).
 	MaxChunkSizeBytes int64
 
-	// A quantidade máxima de chunks com dados em memória (default 50)
-	//
-	// Evita o consumo infinito de memória em caso de falha catastrófica
-	// na escrita de logs.
-	//
-	// Quando esse limite é atingido, os chunks antigos são eliminados
+	// MaxDirtyChunks specifies the maximum number of chunks with data in memory (default 50).
+	// This prevents unlimited memory consumption in the event of a catastrophic failure
+	// in writing logs.
 	MaxDirtyChunks int
 
-	// Tenta persistir um chunk quantas vezes em caso de falha (default 3)
+	// MaxFlushRetry defines the number of retry attempts to persist a chunk in case of failure (default 3).
 	MaxFlushRetry int
 
-	// Se o Chunk atual ficar inativo por esse tempo, envia para
-	// o Storage (default 3 segundos)
+	// FlushAfterSec defines how long a chunk can remain inactive before being sent to storage (default 3 seconds).
 	FlushAfterSec int
 
-	// Intervalo de manutenção dos chunks em milisegundos (default 100)
+	// IntervalCheckMs sets the interval for chunk maintenance in milliseconds (default 100 ms).
 	IntervalCheckMs int32
 }
 
-type Ingester struct {
-	flushChunk   *Chunk // chunk que será salvo na base de dados
-	writeChunk   *Chunk // chunk que está recebendo registros de log
-	writeChunkId int32  // Id do chunk que está sendo usado para escrever atualmente
-	config       *IngesterConfig
-	storage      Storage
-	quit         chan struct{}
-	shutdown     chan struct{}
+// Ingester is the interface that represents the behavior of the log ingester.
+type Ingester interface {
+	// Close terminates the ingester and flushes any remaining log data.
+	Close() (err error)
+
+	// Ingest adds a new log entry with the given timestamp, level, and content.
+	Ingest(t time.Time, level int8, content []byte) error
 }
 
-func NewIngester(config *IngesterConfig, storage Storage) (*Ingester, error) {
+// ingester is the implementation of the Ingester interface, responsible for managing
+// log chunks and ensuring they are flushed to storage.
+type ingester struct {
+	flushChunk   *Chunk          // The chunk that will be saved to the database
+	writeChunk   *Chunk          // The chunk currently receiving log entries
+	writeChunkId int32           // ID of the currently active write chunk
+	config       *IngesterConfig // Configuration options for the ingester
+	storage      Storage         // The storage backend used to persist chunks
+	quit         chan struct{}   // Channel used to signal termination
+	shutdown     chan struct{}   // Channel used to signal shutdown completion
+}
+
+// NewIngester creates a new ingester with the given configuration and storage.
+// If no configuration is provided, default values are used.
+func NewIngester(config *IngesterConfig, storage Storage) (*ingester, error) {
 	if config == nil {
 		config = &IngesterConfig{}
 	}
 
+	// Set default values for config if necessary
 	if config.Chunks <= 0 {
 		config.Chunks = 3
 	}
@@ -75,11 +84,7 @@ func NewIngester(config *IngesterConfig, storage Storage) (*Ingester, error) {
 		config.MaxFlushRetry = 3
 	}
 
-	if config.ChunkSize <= 0 {
-		config.ChunkSize = 900
-	}
-
-	if config.ChunkSize > 900 {
+	if config.ChunkSize <= 0 || config.ChunkSize > 900 {
 		config.ChunkSize = 900
 	}
 
@@ -90,7 +95,7 @@ func NewIngester(config *IngesterConfig, storage Storage) (*Ingester, error) {
 	root := NewChunk(int32(config.ChunkSize))
 	root.Init(config.Chunks)
 
-	i := &Ingester{
+	i := &ingester{
 		config:       config,
 		writeChunkId: root.id,
 		flushChunk:   root,
@@ -100,23 +105,27 @@ func NewIngester(config *IngesterConfig, storage Storage) (*Ingester, error) {
 		shutdown:     make(chan struct{}),
 	}
 
+	// Start the routine to regularly check chunk states
 	go i.routineCheck()
 
 	return i, nil
 }
 
-func (i *Ingester) Ingest(t time.Time, level int8, content []byte) error {
+// Ingest adds a new log entry to the active write chunk. If the chunk becomes full,
+// the ingester switches to a new chunk.
+func (i *ingester) Ingest(t time.Time, level int8, content []byte) error {
 	lastWriteId := i.writeChunkId
 	chunk, isFull := i.writeChunk.Put(&Entry{t, level, content})
 	if isFull && atomic.CompareAndSwapInt32(&i.writeChunkId, lastWriteId, chunk.id) {
-		// o chunk está cheio, aponta para o proximo
+		// The chunk is full, switch to the next one
 		i.writeChunk = chunk
 	}
 	return nil
 }
 
-// routineCheck
-func (i *Ingester) routineCheck() {
+// routineCheck is responsible for periodically checking the status of chunks,
+// flushing them if necessary, and managing shutdown procedures.
+func (i *ingester) routineCheck() {
 	defer close(i.shutdown)
 
 	d := time.Duration(i.config.IntervalCheckMs)
@@ -125,15 +134,13 @@ func (i *Ingester) routineCheck() {
 
 	for {
 		select {
-
 		case <-tick.C:
-
+			// Perform a routine check of chunk states
 			i.doRoutineCheck()
 			tick.Reset(d)
 
 		case <-i.quit:
-			// faz o flush de todos os logs
-
+			// Flush all pending logs when termination is requested
 			tick.Stop()
 
 			chunk := i.flushChunk
@@ -141,16 +148,19 @@ func (i *Ingester) routineCheck() {
 
 			t := 0
 
+			// Attempt to flush all chunks
 			for {
 				if chunk.Empty() {
 					break
 				}
 
 				if chunk.Ready() {
+					// If the chunk is ready to be written to storage, flush it
 					if err := i.storage.Flush(chunk); err != nil {
 						chunk.retries++
 						slog.Error("[sqlog] error writing chunk", slog.Any("error", err))
 
+						// If retries exceed the limit, move to the next chunk
 						if chunk.retries > i.config.MaxFlushRetry {
 							chunk = chunk.Next()
 							chunk.Lock()
@@ -162,8 +172,7 @@ func (i *Ingester) routineCheck() {
 						chunk.Lock()
 					}
 				} else {
-					// should never happen (maybe single-event upset (SEU) :) )
-					// see chunk.Ready() and chunk.Put()
+					// Unexpected state, continue checking next chunk
 					t++
 					if t > 3 {
 						chunk = chunk.Next()
@@ -178,6 +187,7 @@ func (i *Ingester) routineCheck() {
 
 			i.flushChunk = chunk
 
+			// Close the storage after flushing all logs
 			if err := i.storage.Close(); err != nil {
 				slog.Warn(
 					"[sqlog] error closing storage",
@@ -190,13 +200,16 @@ func (i *Ingester) routineCheck() {
 	}
 }
 
-func (i *Ingester) doRoutineCheck() {
+// doRoutineCheck handles the periodic maintenance of chunks, flushing them if they
+// meet the conditions for size or age, and ensuring memory usage stays within limits.
+func (i *ingester) doRoutineCheck() {
 	for {
 		chunk := i.flushChunk
 		if chunk.Empty() {
 			break
 		}
 
+		// Flush the chunk if it's ready to be persisted
 		if chunk.Ready() {
 			if err := i.storage.Flush(chunk); err != nil {
 				chunk.retries++
@@ -211,11 +224,12 @@ func (i *Ingester) doRoutineCheck() {
 				chunk.Init(i.config.Chunks + 1)
 			}
 		} else {
+			// If the chunk is inactive for too long or exceeds the size limit, prepare it for flushing
 			if int(chunk.TTL().Seconds()) > i.config.FlushAfterSec {
-				chunk.Lock() // bloqueia a escrita no chunk para que possa ser persistido na próxima execuçao
+				chunk.Lock() // Lock the chunk for flushing in the next routine
 				chunk.Init(i.config.Chunks)
 			} else if i.config.MaxChunkSizeBytes > 0 && chunk.Size() > i.config.MaxChunkSizeBytes {
-				chunk.Lock() // bloqueia a escrita no chunk para que possa ser persistido na próxima execuçao
+				chunk.Lock() // Lock the chunk for flushing in the next routine
 				chunk.Init(i.config.Chunks)
 			}
 			break
@@ -223,7 +237,7 @@ func (i *Ingester) doRoutineCheck() {
 		i.flushChunk = i.flushChunk.Next()
 	}
 
-	// limita consumo de memória
+	// Limit memory consumption by discarding old chunks if necessary
 	if !i.flushChunk.Empty() && i.flushChunk.Depth() > i.config.MaxDirtyChunks {
 		for {
 			if i.flushChunk.Depth() > i.config.MaxDirtyChunks {
@@ -234,14 +248,13 @@ func (i *Ingester) doRoutineCheck() {
 		}
 		i.flushChunk.Init(i.config.Chunks)
 	}
-
 }
 
-// Close faz o flush dos dados pendentes e fecha o storage
-func (i *Ingester) Close() (err error) {
+// Close flushes any pending log data and closes the storage.
+func (i *ingester) Close() (err error) {
 	defer func() {
-		// Always recover, a panic could be raised if `c`.quit was closed which
-		// means the method was called more than once.
+		// Always recover, as a panic could be raised if `i.quit` was closed,
+		// indicating the method was called more than once.
 		if rec := recover(); rec != nil {
 			err = ErrIngesterClosed
 		}

@@ -16,9 +16,6 @@ var (
 	sqlSeekPageBeforeOrder = []byte(" ORDER BY e.epoch_secs DESC, e.nanos DESC LIMIT ?")
 )
 
-// listEntries obtém uma página de resultados (seek method or keyset pagination).
-// A ordenação é inversa, o resultado mais antigo vem primeiro
-// @TODO: Adicionar epochMax
 func (s *storage) Entries(input *sqlog.EntriesInput) (*sqlog.Output, error) {
 
 	var (

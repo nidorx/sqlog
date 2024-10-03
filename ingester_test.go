@@ -8,30 +8,30 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type testStorage struct {
+type testMockStorage struct {
 	close func() error
 	flush func(chunk *Chunk) error
 }
 
-func (m *testStorage) Flush(chunk *Chunk) error {
+func (m *testMockStorage) Flush(chunk *Chunk) error {
 	if m.flush != nil {
 		return m.flush(chunk)
 	}
 	return nil
 }
 
-func (m *testStorage) Close() error {
+func (m *testMockStorage) Close() error {
 	if m.close != nil {
 		return m.close()
 	}
 	return nil
 }
 
-func Test_IngesterFlushAfterSec(t *testing.T) {
+func Test_Ingester_FlushAfterSec(t *testing.T) {
 
 	var chunk *Chunk
 
-	storage := &testStorage{
+	storage := &testMockStorage{
 		flush: func(c *Chunk) error {
 			chunk = c
 			return nil
@@ -55,11 +55,11 @@ func Test_IngesterFlushAfterSec(t *testing.T) {
 	assert.NotNil(t, chunk, "Storage.Flush not called")
 }
 
-func Test_IngesterMaxChunkSizeBytes(t *testing.T) {
+func Test_Ingester_MaxChunkSizeBytes(t *testing.T) {
 
 	var chunk *Chunk
 
-	storage := &testStorage{
+	storage := &testMockStorage{
 		flush: func(c *Chunk) error {
 			chunk = c
 			return nil
@@ -84,11 +84,11 @@ func Test_IngesterMaxChunkSizeBytes(t *testing.T) {
 	assert.NotNil(t, chunk, "Storage.Flush not called")
 }
 
-func Test_IngesterMaxFlushRetry(t *testing.T) {
+func Test_Ingester_MaxFlushRetry(t *testing.T) {
 
 	var chunk *Chunk
 
-	storage := &testStorage{
+	storage := &testMockStorage{
 		flush: func(c *Chunk) error {
 			chunk = c
 			return errors.New("test")
@@ -113,14 +113,14 @@ func Test_IngesterMaxFlushRetry(t *testing.T) {
 	assert.Equal(t, chunk.retries, 2)
 }
 
-func Test_IngesterMaxDirtyChunks(t *testing.T) {
+func Test_Ingester_MaxDirtyChunks(t *testing.T) {
 
 	var (
 		lastChunk *Chunk
 		chunks    []*Chunk
 	)
 
-	storage := &testStorage{
+	storage := &testMockStorage{
 		flush: func(c *Chunk) error {
 			lastChunk = c
 			if c != lastChunk {
@@ -158,8 +158,8 @@ func Test_IngesterMaxDirtyChunks(t *testing.T) {
 	assert.Equal(t, int32(10), lastChunk.id)
 }
 
-func Test_IngesterClose(t *testing.T) {
-	storage := new(testStorage)
+func Test_Ingester_Close(t *testing.T) {
+	storage := new(testMockStorage)
 	config := &IngesterConfig{}
 	ingester, _ := NewIngester(config, storage)
 	defer ingester.Close()
@@ -168,14 +168,14 @@ func Test_IngesterClose(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func Test_IngesterCloseFlush(t *testing.T) {
+func Test_Ingester_Close_Flush(t *testing.T) {
 
 	var (
 		chunk  *Chunk
 		closed bool
 	)
 
-	storage := &testStorage{
+	storage := &testMockStorage{
 		flush: func(c *Chunk) error {
 			chunk = c
 			return nil
@@ -203,14 +203,14 @@ func Test_IngesterCloseFlush(t *testing.T) {
 	assert.True(t, closed, "Storage.Close not called")
 }
 
-func Test_IngesterCloseMaxFlushRetry(t *testing.T) {
+func Test_Ingester_Close_MaxFlushRetry(t *testing.T) {
 
 	var (
 		chunk  *Chunk
 		closed bool
 	)
 
-	storage := &testStorage{
+	storage := &testMockStorage{
 		flush: func(c *Chunk) error {
 			chunk = c
 			return errors.New("test")

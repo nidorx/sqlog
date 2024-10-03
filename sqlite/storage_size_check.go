@@ -15,7 +15,7 @@ func (s *storage) routineSizeCheck() {
 
 		case <-tick.C:
 
-			// faz o arquivamento de banco de dados
+			// archiving dbs
 			liveDb := s.liveDbs[len(s.liveDbs)-1]
 			if liveDb.size > int64(s.config.MaxFilesizeMB)*1000000 {
 				nextStart := time.Now().Add(time.Duration(s.config.IntervalSizeCheckSec * 2 * int32(time.Second)))
@@ -33,7 +33,7 @@ func (s *storage) routineSizeCheck() {
 				}
 			}
 
-			// atualiza tamanho dos live-dbs
+			// update live-dbs size
 			for _, db := range s.liveDbs {
 				db.updateSize()
 			}
@@ -54,7 +54,7 @@ func (s *storage) routineSizeCheck() {
 
 			tick.Reset(d)
 
-			// @TODO: DB Compression
+			// @TODO: compress DB
 		case <-s.quit:
 			return
 		}
