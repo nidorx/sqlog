@@ -35,7 +35,7 @@
     Nodes = {
 
         // Settings
-        density: 12,
+        density: 13,
         drawDistance: 30,
         baseRadius: 5,
         maxLineThickness: 0.8,
