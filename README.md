@@ -38,7 +38,7 @@ With **SQLog**, you get a lightweight and robust solution for securely logging a
 
     > **Data Structure**: This linked list approach not only simplifies the management of **Chunks** but also facilitates fast, non-blocking writing. By updating the internal references during the flush process, the Ingester ensures that logs are written efficiently with minimal performance impact.
 
-- 4. **Storage**
+4. **Storage**
 
     The **Storage** is responsible for the persistence of logs. **SQLog**'s modular architecture allows for the implementation of different types of storage, such as disk files, databases, and external systems. Currently, there is a [native implementation for SQLite (see more details)](./sqlite) and another in development for in-memory persistence.
 
