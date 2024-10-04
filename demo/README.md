@@ -18,11 +18,7 @@ The demo project captures all mouse movements and sends them to the server, whic
     <img src="./../docs/ui.png" />
 </div>
 
-
-
-
-
-## Build Docker
+## Build Docker (To deploy on render.com)
 
 ```
 docker build --build-arg PROJECT_VERSION=1.0.0 -t nidorx/sqlog-demo:latest .
@@ -32,6 +28,5 @@ docker run -p 8080:8080 nidorx/sqlog-demo:latest
 
 # publish
 docker images nidorx/sqlog-demo
-docker tag stacksimplify/mynginx_image1:v1 stacksimplify/mynginx_image1:v1-release
 docker push nidorx/sqlog-demo:latest
 ```

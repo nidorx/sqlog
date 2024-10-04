@@ -15,6 +15,7 @@ ARG PROJECT_VERSION
 
 WORKDIR /go/src/demo/
 COPY . ./
+COPY go.mod.txt ./go.mod
 
 RUN set -Eeux && go mod tidy && go mod download && go mod verify
 

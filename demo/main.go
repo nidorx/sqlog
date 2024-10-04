@@ -9,8 +9,6 @@ import (
 	"path"
 	"strings"
 
-	// "sqlog"
-
 	"github.com/nidorx/sqlog"
 	"github.com/nidorx/sqlog/sqlite"
 )
@@ -30,8 +28,8 @@ func init() {
 	storage, err := sqlite.New(&sqlite.Config{
 		Dir:             "logs",
 		Prefix:          "demo",
-		MaxFilesizeMB:   1,
-		TotalSizeCapMB:  5,
+		MaxFilesizeMB:   10,
+		TotalSizeCapMB:  100,
 		MaxOpenedDB:     2,
 		MaxRunningTasks: 5,
 		CloseIdleSec:    10,
@@ -42,8 +40,8 @@ func init() {
 
 	config := &sqlog.Config{
 		Ingester: &sqlog.IngesterConfig{
-			Chunks:    3,
-			ChunkSize: 20,
+			Chunks:    5,
+			ChunkSize: 250,
 		},
 		Storage: storage,
 	}
