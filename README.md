@@ -3,8 +3,21 @@
     <img src="./docs/logo.png" />
     <p align="center">
         <strong>SQLog</strong> - Connecting the dots
-    </p>    
+    </p>
 </div>
+
+<!-- PROJECT SHIELDS -->
+[![Go][actions-shield]][actions-url]
+[![Go Report Card][goreport-shield]][goreport-url]
+[![MIT License][license-shield]][license-url]
+
+[actions-shield]: https://github.com/nidorx/sqlog/actions/workflows/go.yml/badge.svg
+[actions-url]: https://github.com/nidorx/sqlog/actions/workflows/go.yml
+[goreport-shield]: https://goreportcard.com/badge/github.com/nidorx/sqlog
+[goreport-url]: https://goreportcard.com/report/github.com/nidorx/sqlog
+[license-shield]: https://img.shields.io/github/license/nidorx/sqlog.svg?style=flat
+[license-url]: https://github.com/nidorx/sqlog/blob/main/LICENSE.txt
+
 
 **SQLog** is a **Golang** library that simplifies log management using **slog**. **SQLog** offers a lightweight and reliable solution for logging, making it perfect for developers seeking a cost-effective, high-performance way to monitor their applications.
 
