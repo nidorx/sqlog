@@ -30,7 +30,7 @@ type IngesterConfig struct {
 	MaxDirtyChunks int
 
 	// MaxFlushRetry defines the number of retry attempts to persist a chunk in case of failure (default 3).
-	MaxFlushRetry int
+	MaxFlushRetry int32
 
 	// FlushAfterSec defines how long a chunk can remain inactive before being sent to storage (default 3 seconds).
 	FlushAfterSec int
@@ -53,6 +53,7 @@ type Ingester interface {
 type ingester struct {
 	flushChunk   *Chunk          // The chunk that will be saved to the database
 	writeChunk   *Chunk          // The chunk currently receiving log entries
+	flushChunkId int32           // ID of the currently active flush chunk
 	writeChunkId int32           // ID of the currently active write chunk
 	config       *IngesterConfig // Configuration options for the ingester
 	storage      Storage         // The storage backend used to persist chunks
@@ -157,11 +158,11 @@ func (i *ingester) routineCheck() {
 				if chunk.Ready() {
 					// If the chunk is ready to be written to storage, flush it
 					if err := i.storage.Flush(chunk); err != nil {
-						chunk.retries++
+						retries := atomic.AddInt32(&chunk.retries, 1)
 						slog.Error("[sqlog] error writing chunk", slog.Any("error", err))
 
 						// If retries exceed the limit, move to the next chunk
-						if chunk.retries > i.config.MaxFlushRetry {
+						if retries > i.config.MaxFlushRetry {
 							chunk = chunk.Next()
 							chunk.Lock()
 						} else {
@@ -186,6 +187,7 @@ func (i *ingester) routineCheck() {
 			}
 
 			i.flushChunk = chunk
+			atomic.StoreInt32(&i.flushChunkId, chunk.id)
 
 			// Close the storage after flushing all logs
 			if err := i.storage.Close(); err != nil {
@@ -200,6 +202,10 @@ func (i *ingester) routineCheck() {
 	}
 }
 
+func (i *ingester) getFlushChunk() {
+
+}
+
 // doRoutineCheck handles the periodic maintenance of chunks, flushing them if they
 // meet the conditions for size or age, and ensuring memory usage stays within limits.
 func (i *ingester) doRoutineCheck() {
@@ -212,10 +218,10 @@ func (i *ingester) doRoutineCheck() {
 		// Flush the chunk if it's ready to be persisted
 		if chunk.Ready() {
 			if err := i.storage.Flush(chunk); err != nil {
-				chunk.retries++
+				retries := atomic.AddInt32(&chunk.retries, 1)
 				slog.Error("[sqlog] error writing chunk", slog.Any("error", err))
 
-				if chunk.retries > i.config.MaxFlushRetry {
+				if retries > i.config.MaxFlushRetry {
 					chunk.Init(i.config.Chunks + 1)
 				} else {
 					break
@@ -235,6 +241,7 @@ func (i *ingester) doRoutineCheck() {
 			break
 		}
 		i.flushChunk = i.flushChunk.Next()
+		atomic.StoreInt32(&i.flushChunkId, i.flushChunk.id)
 	}
 
 	// Limit memory consumption by discarding old chunks if necessary
@@ -242,6 +249,7 @@ func (i *ingester) doRoutineCheck() {
 		for {
 			if i.flushChunk.Depth() > i.config.MaxDirtyChunks {
 				i.flushChunk = i.flushChunk.Next()
+				atomic.StoreInt32(&i.flushChunkId, i.flushChunk.id)
 			} else {
 				break
 			}

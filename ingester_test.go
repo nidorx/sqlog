@@ -3,6 +3,7 @@ package sqlog
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -101,10 +102,15 @@ func Test_Ingester_MaxChunkSizeBytes(t *testing.T) {
 
 func Test_Ingester_MaxFlushRetry(t *testing.T) {
 
-	var chunk *Chunk
+	var (
+		mu    sync.Mutex
+		chunk *Chunk
+	)
 
 	storage := &testMockStorage{
 		flush: func(c *Chunk) error {
+			mu.Lock()
+			defer mu.Unlock()
 			chunk = c
 			return errors.New("test")
 		},
@@ -122,25 +128,18 @@ func Test_Ingester_MaxFlushRetry(t *testing.T) {
 	ingester.Ingest(time.Now(), 0, []byte(`{"msg":"test"}`))
 
 	waitMax(5*time.Second, func() bool {
-		return (chunk != nil && chunk.retries > 1)
+		mu.Lock()
+		defer mu.Unlock()
+		return (chunk != nil && atomic.LoadInt32(&chunk.retries) > 1)
 	})
 
-	assert.Equal(t, chunk.retries, 2)
+	assert.Equal(t, int32(2), atomic.LoadInt32(&chunk.retries))
 }
 
 func Test_Ingester_MaxDirtyChunks(t *testing.T) {
 
-	var (
-		lastChunk *Chunk
-		chunks    []*Chunk
-	)
-
 	storage := &testMockStorage{
 		flush: func(c *Chunk) error {
-			lastChunk = c
-			if c != lastChunk {
-				chunks = append(chunks, c)
-			}
 			return errors.New("test")
 		},
 	}
@@ -162,15 +161,13 @@ func Test_Ingester_MaxDirtyChunks(t *testing.T) {
 	}
 
 	waitMax(5*time.Second, func() bool {
-		return ingester.flushChunk.id == 10
+		return atomic.LoadInt32(&ingester.flushChunkId) == 10
 	})
 
 	ingester.Close()
 
-	lastChunk = ingester.flushChunk
-
 	// lastChunk.id = 10 = (numEntries/ChunkSize)
-	assert.Equal(t, int32(10), lastChunk.id)
+	assert.Equal(t, int32(10), atomic.LoadInt32(&ingester.flushChunkId))
 }
 
 func Test_Ingester_Close(t *testing.T) {
@@ -251,7 +248,7 @@ func Test_Ingester_Close_MaxFlushRetry(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.True(t, closed, "Storage.Close not called")
-	assert.Equal(t, chunk.retries, 2)
+	assert.Equal(t, int32(2), atomic.LoadInt32(&chunk.retries))
 }
 
 func waitMax(max time.Duration, condition func() bool) {

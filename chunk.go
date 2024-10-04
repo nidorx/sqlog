@@ -15,18 +15,18 @@ type Entry struct {
 
 // Chunk stores up to 900 log entries that will be persisted in the storage
 type Chunk struct {
-	mu         sync.Mutex
-	id         int32       // The identifier of this chunk
-	cap        int32       // Configured batch size
-	book       int32       // Number of scheduled writes in this chunk
-	write      int32       // Number of writes completed
-	size       int64       // Size of content (in bytes)
-	epochStart int64       // First epoch
-	epochEnd   int64       // Last epoch
-	retries    int         // Number of attempts to persist in the storage
-	locked     atomic.Bool // Indicates if this chunk no longer accepts writes
-	next       *Chunk      // Pointer to the next chunk
-	entries    [900]*Entry // The log entries in this chunk
+	mu         sync.RWMutex // (next, Depth()) only
+	id         int32        // The identifier of this chunk
+	cap        int32        // Configured batch size
+	book       int32        // Number of scheduled writes in this chunk
+	write      int32        // Number of writes completed
+	size       int64        // Size of content (in bytes)
+	epochStart int64        // First epoch
+	epochEnd   int64        // Last epoch
+	retries    int32        // Number of attempts to persist in the storage
+	locked     atomic.Bool  // Indicates if this chunk no longer accepts writes
+	next       *Chunk       // Pointer to the next chunk
+	entries    [900]*Entry  // The log entries in this chunk
 }
 
 // NewChunk creates a new chunk with the specified capacity
@@ -77,10 +77,13 @@ func (c *Chunk) Depth() int {
 	if c.Empty() {
 		return 0
 	}
-	if c.next == nil {
+	c.mu.RLock()
+	n := c.next
+	c.mu.RUnlock()
+	if n == nil {
 		return 1
 	}
-	return 1 + c.next.Depth()
+	return 1 + n.Depth()
 }
 
 // First retrieves the epoch of the first entry in this chunk
