@@ -47,7 +47,7 @@ func (c *Chunk) Next() *Chunk {
 
 // Size returns the size of this chunk (in bytes)
 func (c *Chunk) Size() int64 {
-	return c.size
+	return atomic.LoadInt64(&c.size)
 }
 
 // Init initializes the next chunks
@@ -95,7 +95,7 @@ func (c *Chunk) Last() int64 {
 
 // TTL retrieves the age of the last log entry inserted in this chunk
 func (c *Chunk) TTL() time.Duration {
-	index := c.write - 1
+	index := atomic.LoadInt32(&c.write) - 1
 	if index < 0 || c.Empty() {
 		return 0
 	}
@@ -108,12 +108,18 @@ func (c *Chunk) TTL() time.Duration {
 
 // Ready indicates if this chunk is full and ready for a flush
 func (c *Chunk) Ready() bool {
-	return c.write == c.cap || (c.book > 0 && c.write == c.book && c.locked.Load())
+	w := atomic.LoadInt32(&c.write)
+	if w == c.cap {
+		return true
+	}
+
+	b := atomic.LoadInt32(&c.book)
+	return (b > 0 && w == b && c.locked.Load())
 }
 
 // Empty indicates if no write attempts have been made
 func (c *Chunk) Empty() bool {
-	return c.book == 0
+	return atomic.LoadInt32(&c.book) == 0
 }
 
 // Lock prevents further writes to this chunk.
@@ -130,7 +136,7 @@ func (c *Chunk) Locked() bool {
 
 // List retrieves the list of written entries
 func (c *Chunk) List() []*Entry {
-	return c.entries[:c.write]
+	return c.entries[:atomic.LoadInt32(&c.write)]
 }
 
 // Put attempts to write the log entry into this chunk.

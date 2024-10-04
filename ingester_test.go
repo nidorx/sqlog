@@ -2,6 +2,7 @@ package sqlog
 
 import (
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,10 +30,15 @@ func (m *testMockStorage) Close() error {
 
 func Test_Ingester_FlushAfterSec(t *testing.T) {
 
-	var chunk *Chunk
+	var (
+		mu    sync.Mutex
+		chunk *Chunk
+	)
 
 	storage := &testMockStorage{
 		flush: func(c *Chunk) error {
+			mu.Lock()
+			defer mu.Unlock()
 			chunk = c
 			return nil
 		},
@@ -49,6 +55,8 @@ func Test_Ingester_FlushAfterSec(t *testing.T) {
 	ingester.Ingest(time.Now(), 0, []byte(`{"msg":"test"}`))
 
 	waitMax(3*time.Second, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
 		return (chunk != nil)
 	})
 
@@ -57,10 +65,15 @@ func Test_Ingester_FlushAfterSec(t *testing.T) {
 
 func Test_Ingester_MaxChunkSizeBytes(t *testing.T) {
 
-	var chunk *Chunk
+	var (
+		mu    sync.Mutex
+		chunk *Chunk
+	)
 
 	storage := &testMockStorage{
 		flush: func(c *Chunk) error {
+			mu.Lock()
+			defer mu.Unlock()
 			chunk = c
 			return nil
 		},
@@ -78,6 +91,8 @@ func Test_Ingester_MaxChunkSizeBytes(t *testing.T) {
 	ingester.Ingest(time.Now(), 0, []byte(`{"msg":"test"}`))
 
 	waitMax(3*time.Second, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
 		return (chunk != nil)
 	})
 
