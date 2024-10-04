@@ -21,7 +21,7 @@ type exprParseState[E any] struct {
 func (s *exprParseState[E]) addOperator() {
 	if s.dirty {
 		if s.operator == "" {
-			s.builder.Operator("OR")
+			s.builder.Operator("AND")
 		} else {
 			s.builder.Operator(s.operator)
 		}

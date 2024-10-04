@@ -84,11 +84,11 @@ func Test_ExprBasic(t *testing.T) {
 		},
 		{
 			"hello world",
-			[]any{"msg", "LIKE", "hello", "OR", "msg", "LIKE", "world"},
+			[]any{"msg", "LIKE", "hello", "AND", "msg", "LIKE", "world"},
 		},
 		{
 			"hello* *world",
-			[]any{"msg", "LIKE", "hello*", "OR", "msg", "LIKE", "*world"},
+			[]any{"msg", "LIKE", "hello*", "AND", "msg", "LIKE", "*world"},
 		},
 		{
 			`"hello world"`,
@@ -112,11 +112,11 @@ func Test_ExprBasic(t *testing.T) {
 		},
 		{
 			"field:hello world",
-			[]any{"field", "LIKE", "hello", "OR", "msg", "LIKE", "world"},
+			[]any{"field", "LIKE", "hello", "AND", "msg", "LIKE", "world"},
 		},
 		{
 			"field:hello* *world",
-			[]any{"field", "LIKE", "hello*", "OR", "msg", "LIKE", "*world"},
+			[]any{"field", "LIKE", "hello*", "AND", "msg", "LIKE", "*world"},
 		},
 		{
 			`field:"hello world"`,
@@ -229,7 +229,7 @@ func Test_ExprBoolean(t *testing.T) {
 			[]any{"field", "LIKE", "hello", "OR", "msg", "LIKE", "world"},
 		},
 		{
-			"hello AND (beautiful world)",
+			"hello AND (beautiful OR world)",
 			[]any{"msg", "LIKE", "hello", "AND", "(", "msg", "LIKE", "beautiful", "OR", "msg", "LIKE", "world", ")"},
 		},
 		{

@@ -250,9 +250,9 @@
             ENTRIES = [];
             $("> tbody tr", $content).remove();
         } else {
-            // remove apenas os registros que não estão no range [EPOCH_START,EPOCH_END]
-            // usado pelo zoom e quando usuario seleciona outro periodo
-            // evita limpar todo o conteúdo, mantendo o scroll atual
+            // only remove records that are not within the range [EPOCH_START, EPOCH_END]
+            // used for zooming and when the user selects another period
+            // prevents clearing all content, keeping the current scroll
             ENTRIES = ENTRIES.filter(entry => {
                 if (entry.Epoch < EPOCH_START || entry.Epoch > EPOCH_END) {
                     entry.Element.remove();
@@ -311,10 +311,10 @@
     }
 
     /**
-     * Obtém os marcadores para o filtro e o intervalo de tempo definido.
-     * 
-     * Com essa informação é possível fazer a paginaçao do resultado (Keyset Pagination)
-     */
+      * Retrieves the markers for the filter and the defined time range.
+      * 
+      * With this information, it is possible to paginate the results (Keyset Pagination).
+      */
     function requestTicks() {
 
         const $chart = document.querySelector("#chart");
@@ -438,7 +438,13 @@
                     d: 'YYYY-MM-DD HH:mm',
                 })[INTERVAL_UNIT];
 
-                [5, 15, 25, 35, 50, 65, 75, 85, 95].forEach(percent => {
+
+                let pcts = [5, 15, 25, 35, 50, 65, 75, 85, 95];
+                if (window.outerWidth < 768) {
+                    pcts = [5, 50, 95];
+                }
+
+                pcts.forEach(percent => {
                     let tickIndex = Math.floor((TICKS.length - 1) * percent / 100);
                     let tick = TICKS[tickIndex];
 
@@ -469,10 +475,10 @@
     }
 
     /**
-     * Faz o carregamento dos próximos registros
-     * 
-     * @param {string} direction before|after
-     */
+      * Loads the next set of records
+      * 
+      * @param {string} direction before|after
+      */
     function loadEntries(direction) {
 
         if (direction == 'before') {
@@ -553,12 +559,6 @@
                         Element: null,
                         Overview: getTags(data)
                     }
-
-                    // @TODO: remover essa lógica
-                    // let tickIndex = Math.floor((entry.Date.getTime() - EPOCH_START) / INTERVAL);
-                    // let tick = ticks[tickIndex];
-                    // entry.Tick = tick;
-                    // tick.Events.push(entry);
 
                     return entry
                 });
@@ -648,7 +648,7 @@
                 tbody.append(tr);
             });
 
-            // remove do inicio
+            // remove from the beginning
             if (!IS_LOADING_AFTER && ENTRIES.length > 60) {
                 HAS_MORE_AFTER = true;
                 let toRemove = ENTRIES.splice(0, ENTRIES.length - 60);
@@ -677,7 +677,7 @@
             let chunkHeight = $content.height() - heightBefore;
             $container.scrollTop(viewTop + chunkHeight);
 
-            // remove itens do final
+            // remove items from the end
             if (!IS_LOADING_BEFORE && ENTRIES.length > 60) {
                 HAS_MORE_BEFORE = true
                 let toRemove = ENTRIES.splice(60);

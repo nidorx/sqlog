@@ -6,25 +6,17 @@
     </p>    
 </div>
 
-**SQLog** is a **Golang** library that leverages the power of **slog** to streamline log management in a simple and efficient way. 
+**SQLog** is a **Golang** library that simplifies log management using **slog**. **SQLog** offers a lightweight and reliable solution for logging, making it perfect for developers seeking a cost-effective, high-performance way to monitor their applications.
 
-One of its key advantages is its integration with **SQLite**, an embedded database, meaning there's no need for an external database server setup. This reduces operational costs and drastically simplifies system maintenance, as everything runs **embedded**, without complex dependencies.
+It integrates with **SQLite**, so no external database setup is required. This keeps operations simple and reduces costs, as everything runs **embedded**.
 
-With **SQLog**, you get a lightweight and robust solution for securely logging and storing data. It's ideal for developers looking for a practical, cost-effective, and reliable way to monitor their applications, without sacrificing performance.
 
-## Requirements
-
-The builtin SQLite storage uses the package `github.com/mattn/go-sqlite3`, which is a cgo package, so you need `gcc`.
-
-See the link for more details: [https://github.com/mattn/go-sqlite3?tab=readme-ov-file#installation](https://github.com/mattn/go-sqlite3?tab=readme-ov-file#installation)
 
 ## Usage
 
 Below is an example of using **SQLog** with the SQLite storage, with the interface exposed on port `8080`. When you access `http://localhost:8080?msg=test`, any query parameter will be sent to the log.
 
 You can view the generated logs at `http://localhost:8080/logs/`.
-
-> **Demo** You can see a [complete example in the demo directory](./demo/).
 
 ```go
 import (
@@ -80,16 +72,19 @@ func main() {
 
 ## Demo
 
-[SQLog-demo.webm](https://github.com/user-attachments/assets/046b65c9-dd36-4779-8b15-915be5f7e3f3)
-
-There is a test project in the [demo directory](./demo/).
+You can view the current version of the SQLog demo at the links below:
 
 The demo project captures all mouse movements and sends them to the server, which logs the received parameters.
 
-You can also view the current version of the SQLog demo at the links below:
+- **Log generator**: https://sqlog-demo.onrender.com/
+- **SQLog UI** : https://sqlog-demo.onrender.com/logs/
 
-- Log generator (see console): https://sqlog-demo.onrender.com/
-- **SQLog** UI: https://sqlog-demo.onrender.com/logs/
+    > **IMPORTANT**! I am using the [free version of Render](https://docs.render.com/free), so there is no guarantee of service stability or availability.
+
+[SQLog-demo.webm](https://github.com/user-attachments/assets/046b65c9-dd36-4779-8b15-915be5f7e3f3)
+
+The source code is in the [demo directory](./demo/).
+
 
 
 <div align="center">
@@ -97,10 +92,7 @@ You can also view the current version of the SQLog demo at the links below:
 </div>
 
 
-> **IMPORTANT**! I am using the [free version of Render](https://docs.render.com/free), so there is no guarantee of service stability or availability.
-
-
-## How it works
+## How SQLog works?
 
 <div align="center">
     <img src="./docs/diagram.png" />
@@ -134,6 +126,11 @@ You can also view the current version of the SQLog demo at the links below:
 
 The combination of these layers makes **SQLog** a robust and efficient solution for log management, optimizing performance through a non-blocking architecture and the use of atomic operations. This results in fast, real-time log capture capable of handling high workloads without compromising efficiency.
 
+## Requirements
+
+The builtin SQLite storage uses the package `github.com/mattn/go-sqlite3`, which is a cgo package, so you need `gcc`.
+
+See the link for more details: [https://github.com/mattn/go-sqlite3?tab=readme-ov-file#installation](https://github.com/mattn/go-sqlite3?tab=readme-ov-file#installation)
 
 ## @TODO/IDEAS/ROADMAP
 

@@ -30,12 +30,12 @@ func Test_ExprBasic(t *testing.T) {
 		},
 		{
 			"hello world",
-			"json_extract(e.content, ?) GLOB ? OR json_extract(e.content, ?) GLOB ?",
+			"json_extract(e.content, ?) GLOB ? AND json_extract(e.content, ?) GLOB ?",
 			[]any{"$.msg", "*hello*", "$.msg", "*world*"},
 		},
 		{
 			"hello* *world",
-			"json_extract(e.content, ?) GLOB ? OR json_extract(e.content, ?) GLOB ?",
+			"json_extract(e.content, ?) GLOB ? AND json_extract(e.content, ?) GLOB ?",
 			[]any{"$.msg", "hello*", "$.msg", "*world"},
 		},
 		{
@@ -65,12 +65,12 @@ func Test_ExprBasic(t *testing.T) {
 		},
 		{
 			"field:hello world",
-			"json_extract(e.content, ?) GLOB ? OR json_extract(e.content, ?) GLOB ?",
+			"json_extract(e.content, ?) GLOB ? AND json_extract(e.content, ?) GLOB ?",
 			[]any{"$.field", "*hello*", "$.msg", "*world*"},
 		},
 		{
 			"field:hello* *world",
-			"json_extract(e.content, ?) GLOB ? OR json_extract(e.content, ?) GLOB ?",
+			"json_extract(e.content, ?) GLOB ? AND json_extract(e.content, ?) GLOB ?",
 			[]any{"$.field", "hello*", "$.msg", "*world"},
 		},
 		{
@@ -205,7 +205,7 @@ func Test_ExprBoolean(t *testing.T) {
 			[]any{"$.field", "*hello*", "$.msg", "*world*"},
 		},
 		{
-			"hello AND (beautiful world)",
+			"hello AND (beautiful OR world)",
 			`json_extract(e.content, ?) GLOB ? AND (json_extract(e.content, ?) GLOB ? OR json_extract(e.content, ?) GLOB ?)`,
 			[]any{"$.msg", "*hello*", "$.msg", "*beautiful*", "$.msg", "*world*"},
 		},

@@ -9,12 +9,14 @@ import (
 	"path"
 	"strings"
 
+	// "sqlog"
+
 	"github.com/nidorx/sqlog"
 	"github.com/nidorx/sqlog/sqlite"
 )
 
 var (
-	dev = false
+	dev = true
 
 	log sqlog.Log
 

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="en-us">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -19,7 +19,7 @@
                 <div class="pt-3 pb-2 mb-3 border-bottom">                    
                     <div class="row">
                         <div class="col">
-                            <div class="input-group mb-3">                                
+                            <div class="input-group mb-3 inputs">                                
                                 <div id="date-range" class="form-control">
                                     &nbsp; <strong></strong>
                                 </div>
@@ -142,27 +142,220 @@
         </tr>
     </template>
 
-    <div class="offcanvas offcanvas-end" tabindex="-1" id="off-canvas-syntax" style="--bs-offcanvas-width:600px">
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="off-canvas-syntax">
         <div class="offcanvas-header">
-            <h5 class="offcanvas-title">Search Syntax</h5>
+            <h1 class="offcanvas-title">Search Syntax</h1>
+            
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
         </div>
         <div class="offcanvas-body">
             <div>
-                @TODO: Documentar usando
-                https://docs.datadoghq.com/logs/explorer/search_syntax
-                https://raw.githubusercontent.com/DataDog/documentation/refs/heads/master/content/en/logs/explorer/search_syntax.md
-            </div>
-            <div class="dropdown mt-3">
-                <button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                    Dropdown button
-                </button>
-                <ul class="dropdown-menu">
-                    <li><a class="dropdown-item" href="#">Action</a></li>
-                    <li><a class="dropdown-item" href="#">Another action</a></li>
-                    <li><a class="dropdown-item" href="#">Something else here</a></li>
+                <p class="text-body-tertiary">
+                    <small>
+                        In addition to the UI, SQLog's search syntax is also 
+                        inspired by <a target="_blank" href="https://docs.datadoghq.com/logs/explorer/search_syntax/">Datadog</a>.
+                    </small>
+                </p>        
+                
+                <h2>Overview</h2>
+                 
+                <p>A query filter is composed of terms and operators.</p>
+                <p>There are two types of terms:</p>
+                <ul>
+                    <li>
+                        <p>A <strong>single term</strong> is a single word such as <code>test</code> or <code>hello</code>.</p>
+                    </li>
+                    <li>
+                        <p>
+                            A <strong>sequence</strong> is a group of words surrounded by double quotes, such as <code>"hello dolly"</code>.
+                        </p>
+                    </li>
                 </ul>
-            </div>
+
+                <p>
+                    To combine multiple terms into a complex query, you can use any of the following case insensitive Boolean operators:
+                </p>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th><strong>Operator</strong></th>
+                            <th><strong>Description</strong></th>
+                            <th><strong>Example</strong></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>AND</code></td>
+                            <td>
+                                <strong>Intersection</strong>: both terms are in the selected events (if nothing is added, AND is taken by default)
+                            </td>
+                            <td>authentication AND failure</td>
+                        </tr>
+                        <tr>
+                            <td><code>OR</code></td>
+                            <td><strong>Union</strong>: either term is contained in the selected events</td>
+                            <td>authentication OR password</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h2>Search wildcard</h2>
+                <p>
+                    You can combine text with wildcards to enhance your searches.
+                </p>                
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th><strong>Wildcard</strong></th>
+                            <th><strong>Description</strong></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>?</code></td>
+                            <td>
+                                Match a single special character or space. For example, to search 
+                                for an attribute <code>my_attribute</code> with the value <code>hello world</code>, <code>my_attribute:hello?world</code>.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><code>*</code></td>
+                            <td>
+                                Perform a multi-character wildcard search.
+                                <ul>
+                                    <li>
+                                        <code>service:web*</code> matches every log message that has a service starting with <code>web</code>.
+                                    </li>
+                                    <li><code>web*</code> matches all log messages starting with <code>web</code>.</li>
+                                    <li><code>*web</code> matches all log messages that end with <code>web</code>.</li>
+                                </ul>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p>
+                    <strong>Note</strong>: Wildcards work as wildcards inside and outside of double quotes. For example,
+                    <code>"*test*"</code> and <code>*test*</code> matches a log which has the string <code>test</code> in its message. 
+                    You cand escape the wildcard with with the <code>\</code> character (example <code>"\*test\*"</code>).
+                </p>
+                
+                <h2>Single term example</h2>
+                <div class="table-wrapper">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th><strong>Search syntax</strong></th>                                
+                                <th><strong>Description</strong></th>
+                            </tr>
+                        </thead>
+                        <tbody>                            
+                            <tr>
+                                <td><code>hello</code></td>                                
+                                <td>Searches only the log message for the term <code>hello</code>.</td>
+                            </tr>
+                            <tr>
+                                <td><code>hello*</code></td>                                
+                                <td>Searches all log attributes for strings that starts with <code>hello</code>. For example, <code>hello_world</code>.</td>
+                            </tr>
+                            <tr>
+                                <td><code>*world</code></td>                                
+                                <td>Searches all log attributes for strings that finishes with <code>world</code>. For example, <code>hello_world</code>.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h2>Multiple terms with exact match example</h2>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th><strong>Search syntax</strong></th>                                
+                            <th><strong>Description</strong></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>"hello world"</code></td>                                
+                            <td>Searches only the log message for the exact term <code>hello world</code>.</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h2>Multiple terms without exact match example</h2>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th><strong>Search syntax</strong></th>                                
+                            <th><strong>Description</strong></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>hello world</code></td>                                
+                            <td>
+                                Is equivalent to <code>hello AND world</code>. 
+                                It searches only the log message for the terms <code>hello</code> and <code>world</code>.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><code>"hello world" "i am here"</code></td>                                
+                            <td>
+                                It searches all log attributes for the terms <code>hello world</code> and <code>i am here</code>.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                
+                
+                <h2>Attributes search</h2>
+                <p>To search on a specific attribute, add <code>:</code> to specify you are searching on an attribute.</p>
+                <p>
+                    For instance, if your attribute name is <strong>url</strong> and you want to filter on the
+                    <strong>url</strong> value <code>https://github.com/nidorx/sqlog</code>, enter: <code>url:https://github.com/nidorx/sqlog</code>
+                </p>
+                
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th><strong>Search query</strong></th>                                
+                            <th><strong>Description</strong></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>http.url_details.path:"/api/v1/test"</code></td>
+                            <td>
+                                Searches all logs matching <code>/api/v1/test</code> in the attribute <code>http.url_details.path</code>.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><code>http.url:/api-v1/*</code></td>
+                            <td>
+                                Searches all logs containing a value in <code>http.url</code> attribute that start with <code>/api-v1/</code>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><code>http.status_code:[200 TO 299] http.url_details.path:/api-v1/*</code></td>
+                            <td>
+                                Searches all logs containing a <code>http.status_code</code> value between 200 and 299, and
+                                containing a value in <code>http.url_details.path</code> attribute that start with
+                                <code>/api-v1/</code>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+               
+                <h2>Numerical values</h2>
+                <p>
+                    You can use numerical operators (<code>&lt;</code>,<code>&gt;</code>, <code>&lt;=</code>, or <code>&gt;=</code>) to
+                    perform a search.
+                    For instance, retrieve all logs that have a response time over 100ms with: <code>http.response_time:&gt;100</code>
+                </p>
+                <p>
+                    You can search for numerical attribute within a specific range. For instance, retrieve all your 4xx errors with: <code>http.status_code:[400 TO 499]</code>
+                </p>
+            </div>            
         </div>
     </div>
     
