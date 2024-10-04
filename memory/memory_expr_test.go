@@ -89,7 +89,7 @@ var testExpMemoryLogs = []string{
 	`{"id": 64, "msg":"hell\"o \"world"}`,
 }
 
-func Test_MemoryExprBasic(t *testing.T) {
+func Test_Memory_ExprBasic(t *testing.T) {
 	testCases := []testExprMemoryData{
 		{
 			"hello",
@@ -101,11 +101,11 @@ func Test_MemoryExprBasic(t *testing.T) {
 		},
 		{
 			"hello world",
-			[]int{1, 3, 7, 8, 11, 12, 40, 42, 51, 52, 64},
+			[]int{7, 8, 11, 12, 51, 52},
 		},
 		{
 			"hello* *world",
-			[]int{1, 3, 7, 8, 11, 12, 40, 42, 51, 52, 64},
+			[]int{7, 11, 51},
 		},
 		{
 			`"hello world"`,
@@ -129,11 +129,11 @@ func Test_MemoryExprBasic(t *testing.T) {
 		},
 		{
 			"field:hello world",
-			[]int{3, 7, 8, 11, 12, 15, 21, 22, 25, 26, 40, 42, 43, 44, 45, 46, 47, 51, 52, 54, 55, 64},
+			[]int{42},
 		},
 		{
 			"field:hello* *world",
-			[]int{3, 7, 11, 15, 21, 22, 25, 26, 40, 42, 43, 44, 45, 46, 47, 51, 54, 55, 64},
+			[]int{42},
 		},
 		{
 			`field:"hello world"`,
@@ -149,12 +149,14 @@ func Test_MemoryExprBasic(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runMemoryExprTest(t, tt)
+		t.Run(tt.expr, func(t *testing.T) {
+			runMemoryExprTest(t, tt)
+		})
 	}
 }
 
 // Numerical values
-func Test_MemoryExprNumerical(t *testing.T) {
+func Test_Memory_ExprNumerical(t *testing.T) {
 	testCases := []testExprMemoryData{
 		{
 			`field:99`,
@@ -178,11 +180,13 @@ func Test_MemoryExprNumerical(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runMemoryExprTest(t, tt)
+		t.Run(tt.expr, func(t *testing.T) {
+			runMemoryExprTest(t, tt)
+		})
 	}
 }
 
-func Test_MemoryExprArray(t *testing.T) {
+func Test_Memory_ExprArray(t *testing.T) {
 	testCases := []testExprMemoryData{
 		{
 			`[hello world]`,
@@ -214,12 +218,14 @@ func Test_MemoryExprArray(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runMemoryExprTest(t, tt)
+		t.Run(tt.expr, func(t *testing.T) {
+			runMemoryExprTest(t, tt)
+		})
 	}
 }
 
 // Boolean Operators
-func Test_MemoryExprBoolean(t *testing.T) {
+func Test_Memory_ExprBoolean(t *testing.T) {
 	testCases := []testExprMemoryData{
 		{
 			"hello AND world",
@@ -251,7 +257,7 @@ func Test_MemoryExprBoolean(t *testing.T) {
 		},
 		{
 			"hello AND (beautiful world)",
-			[]int{7, 8, 11, 12, 51, 52},
+			[]int{11, 12},
 		},
 		{
 			"hello AND (beautiful AND world)",
@@ -267,11 +273,13 @@ func Test_MemoryExprBoolean(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runMemoryExprTest(t, tt)
+		t.Run(tt.expr, func(t *testing.T) {
+			runMemoryExprTest(t, tt)
+		})
 	}
 }
 
-func Test_MemoryExprEscape(t *testing.T) {
+func Test_Memory_ExprEscape(t *testing.T) {
 	testCases := []testExprMemoryData{
 		{
 			`hell\"o`,
@@ -323,11 +331,13 @@ func Test_MemoryExprEscape(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runMemoryExprTest(t, tt)
+		t.Run(tt.expr, func(t *testing.T) {
+			runMemoryExprTest(t, tt)
+		})
 	}
 }
 
-func Test_MemoryExprIncomplete(t *testing.T) {
+func Test_Memory_ExprIncomplete(t *testing.T) {
 	testCases := []testExprMemoryData{
 		{
 			`"hello \" world`,
@@ -359,7 +369,9 @@ func Test_MemoryExprIncomplete(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runMemoryExprTest(t, tt)
+		t.Run(tt.expr, func(t *testing.T) {
+			runMemoryExprTest(t, tt)
+		})
 	}
 }
 

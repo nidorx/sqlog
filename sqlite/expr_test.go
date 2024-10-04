@@ -90,7 +90,9 @@ func Test_ExprBasic(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runExprTest(t, tt)
+		t.Run(tt.expr, func(t *testing.T) {
+			runExprTest(t, tt)
+		})
 	}
 }
 
@@ -124,7 +126,9 @@ func Test_ExprNumerical(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runExprTest(t, tt)
+		t.Run(tt.expr, func(t *testing.T) {
+			runExprTest(t, tt)
+		})
 	}
 }
 
@@ -167,7 +171,9 @@ func Test_ExprArray(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runExprTest(t, tt)
+		t.Run(tt.expr, func(t *testing.T) {
+			runExprTest(t, tt)
+		})
 	}
 }
 
@@ -235,7 +241,9 @@ func Test_ExprBoolean(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runExprTest(t, tt)
+		t.Run(tt.expr, func(t *testing.T) {
+			runExprTest(t, tt)
+		})
 	}
 }
 
@@ -303,7 +311,9 @@ func Test_ExprEscape(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runExprTest(t, tt)
+		t.Run(tt.expr, func(t *testing.T) {
+			runExprTest(t, tt)
+		})
 	}
 }
 
@@ -353,7 +363,9 @@ func Test_ExprIncomplete(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		runExprTest(t, tt)
+		t.Run(tt.expr, func(t *testing.T) {
+			runExprTest(t, tt)
+		})
 	}
 }
 
