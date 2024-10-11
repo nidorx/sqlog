@@ -29,7 +29,7 @@ func init() {
 		Dir:             "logs",
 		Prefix:          "demo",
 		MaxFilesizeMB:   10,
-		TotalSizeCapMB:  100,
+		MaxSizeTotalMB:  100,
 		MaxOpenedDB:     2,
 		MaxRunningTasks: 5,
 		CloseIdleSec:    10,

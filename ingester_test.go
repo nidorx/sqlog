@@ -130,10 +130,10 @@ func Test_Ingester_MaxFlushRetry(t *testing.T) {
 	waitMax(5*time.Second, func() bool {
 		mu.Lock()
 		defer mu.Unlock()
-		return (chunk != nil && atomic.LoadInt32(&chunk.retries) > 1)
+		return (chunk != nil && chunk.Retries() > 1)
 	})
 
-	assert.Equal(t, int32(2), atomic.LoadInt32(&chunk.retries))
+	assert.Equal(t, int32(2), chunk.Retries())
 }
 
 func Test_Ingester_MaxDirtyChunks(t *testing.T) {
@@ -248,7 +248,7 @@ func Test_Ingester_Close_MaxFlushRetry(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.True(t, closed, "Storage.Close not called")
-	assert.Equal(t, int32(2), atomic.LoadInt32(&chunk.retries))
+	assert.Equal(t, int32(2), chunk.Retries())
 }
 
 func waitMax(max time.Duration, condition func() bool) {

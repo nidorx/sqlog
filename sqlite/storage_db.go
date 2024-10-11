@@ -8,10 +8,6 @@ import (
 	"log/slog"
 	"os"
 	"path"
-	"path/filepath"
-	"sort"
-	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -63,7 +59,7 @@ type storageDb struct {
 	epochStart     int64      // Epoch of the oldest entry in this database
 	newEpochStart  int64      // When accepting an old log, adjust file name when closing the DB
 	epochEnd       int64      // Epoch of the newest entry in this database
-	lastQueryEpoch int64      // Last usage timestamp of this storage (query)
+	lastUsedEpoch  int64      // Last usage timestamp of this storage (query, flush)
 	maxChunkAgeSec int64      // Maximum allowed chunk age
 	fileDir        string     // Directory of the database file
 	filePath       string     // Path to the database file
@@ -114,26 +110,30 @@ func (s *storageDb) isOpen() bool {
 	return atomic.LoadInt32(&s.status) == db_open
 }
 
-// lastQuerySec returns the time elapsed since the last use of this database
-func (s *storageDb) lastQuerySec() int64 {
-	return time.Now().Unix() - s.lastQueryEpoch
+// lastUsedSec returns the time elapsed since the last use of this database
+func (s *storageDb) lastUsedSec() int64 {
+	return time.Now().Unix() - s.lastUsedEpoch
 }
 
 // updateSize updates the size of the database
 // https://til.simonwillison.net/sqlite/database-file-size
 // https://www.powersync.com/blog/sqlite-optimizations-for-ultra-high-performance
 func (s *storageDb) updateSize() error {
-	stm, rows, err := s.query(`
+	stm, err := s.db.Prepare(`
 		SELECT 
 			page_count * page_size as total_size, 
 			freelist_count * page_size as freelist_size 
 		FROM  pragma_page_count(), pragma_freelist_count(), pragma_page_size()
-	`, nil,
-	)
+	`)
 	if err != nil {
 		return err
 	}
 	defer stm.Close()
+
+	rows, err := stm.Query()
+	if err != nil {
+		return err
+	}
 	defer rows.Close()
 
 	var (
@@ -153,7 +153,7 @@ func (s *storageDb) updateSize() error {
 
 // closeSafe checks if the database can be safely closed
 func (s *storageDb) closeSafe() bool {
-	if s.lastQuerySec() < 2 {
+	if s.lastUsedSec() < 2 {
 		return false
 	}
 	return s.close()
@@ -209,7 +209,7 @@ func (s *storageDb) connect(options map[string]string) error {
 		}
 
 		s.db = db
-		atomic.StoreInt64(&s.lastQueryEpoch, time.Now().Unix())
+		atomic.StoreInt64(&s.lastUsedEpoch, time.Now().Unix())
 		atomic.StoreInt32(&s.status, db_open)
 	}
 	return nil
@@ -232,8 +232,6 @@ func (s *storageDb) query(sql string, args []any) (*sql.Stmt, *sql.Rows, error) 
 		return nil, nil, err
 	}
 
-	atomic.StoreInt64(&s.lastQueryEpoch, time.Now().Unix())
-
 	return stm, rows, nil
 }
 
@@ -244,6 +242,7 @@ func (s *storageDb) flush(chunk *sqlog.Chunk) error {
 	sql := bytes.NewBuffer(make([]byte, 0, 1952))
 	sql.Write(sqlInsert)
 
+	var size int64
 	maxChunkAge := s.epochStart - s.maxChunkAgeSec
 
 	for i, e := range chunk.List() {
@@ -259,6 +258,7 @@ func (s *storageDb) flush(chunk *sqlog.Chunk) error {
 			continue
 		}
 		values = append(values, epoch, e.Time.Nanosecond(), e.Level, e.Content)
+		size += int64(len(e.Content))
 	}
 
 	if len(values) == 0 {
@@ -283,11 +283,14 @@ func (s *storageDb) flush(chunk *sqlog.Chunk) error {
 		stmt.Close()
 		tx.Commit()
 
+		atomic.AddInt64(&s.size, size)
 		s.epochEnd = max(chunk.Last(), s.epochEnd)
 		if chunkEpochStart := chunk.First(); chunkEpochStart < s.newEpochStart {
 			// db will renamed during close
 			s.newEpochStart = chunkEpochStart
 		}
+		atomic.StoreInt64(&s.lastUsedEpoch, time.Now().Unix())
+
 		return nil
 	}
 }
@@ -300,7 +303,14 @@ func (s *storageDb) checkpoint(mode string) {
 
 		// "PASSIVE", "FULL", "RESTART", "TRUNCATE"
 		// https://www.sqlite.org/pragma.html#pragma_wal_checkpoint
-		s.db.Exec("PRAGMA wal_checkpoint(?)", mode)
+		_, err := s.db.Exec(fmt.Sprintf("PRAGMA wal_checkpoint(%s)", mode))
+		if err != nil {
+			slog.Warn(
+				"[sqlog] error checkpoint",
+				slog.String("path", s.filePath),
+				slog.Any("error", err),
+			)
+		}
 	}
 }
 
@@ -356,103 +366,4 @@ func (s *storageDb) vacuum() error {
 	// https://www.sqlite.org/dbstat.html
 	_, err := s.db.Exec("VACUUM")
 	return err
-}
-
-func newDb(dir, prefix string, start time.Time, maxChunkAgeSec int64) *storageDb {
-
-	epochStart := start.Unix()
-	name := fmt.Sprintf("%s_%d.db", prefix, epochStart)
-
-	return &storageDb{
-		fileDir:        dir,
-		filePath:       path.Join(dir, name),
-		filePrefix:     prefix,
-		size:           0, // live db will updated during execution
-		status:         db_closed,
-		epochStart:     epochStart,
-		newEpochStart:  epochStart,
-		maxChunkAgeSec: maxChunkAgeSec,
-		epochEnd:       0,
-	}
-}
-
-func initDbs(dir, prefix string) (dbs []*storageDb, err error) {
-
-	if err = os.MkdirAll(dir, 0755); err != nil {
-		return
-	}
-
-	err = filepath.Walk(dir, func(filepath string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-
-		name := info.Name()
-		if !strings.HasPrefix(name, prefix) || path.Ext(name) != ".db" {
-			return nil
-		}
-
-		var (
-			epochStart int64
-			epochEnd   int64
-		)
-
-		epochs := strings.Split(strings.TrimSuffix(strings.TrimPrefix(name, prefix+"_"), ".db"), "_")
-
-		epochStart, err = strconv.ParseInt(epochs[0], 10, 64)
-		if err != nil {
-			slog.Warn("[sqlog] invalid database name", slog.String("filepath", filepath), slog.Any("err", err))
-			return nil
-		}
-
-		if len(epochs) > 1 {
-			epochEnd, err = strconv.ParseInt(epochs[1], 10, 64)
-			if err != nil {
-				slog.Warn("[sqlog] invalid database name", slog.String("filepath", filepath), slog.Any("err", err))
-				return nil
-			}
-		}
-
-		dbs = append(dbs, &storageDb{
-			filePath:   path.Join(dir, name),
-			size:       info.Size(), // live db will updated during execution
-			status:     db_closed,
-			epochStart: epochStart,
-			epochEnd:   epochEnd,
-		})
-
-		return nil
-	})
-	if err != nil {
-		err = errors.Join(errors.New("[sqlog] error initializing the storage"), err)
-	}
-
-	if len(dbs) > 1 {
-		sortDbs(dbs)
-	}
-
-	return
-}
-
-func sortDbs(dbs []*storageDb) {
-	sort.SliceStable(dbs, func(i, j int) bool {
-		ae := dbs[i].epochEnd
-		be := dbs[j].epochEnd
-		if ae == 0 && be == 0 {
-			return dbs[i].epochStart < dbs[j].epochStart
-		}
-
-		if be == 0 {
-			return true
-		}
-
-		if ae == 0 {
-			return false
-		}
-
-		return ae > be
-	})
 }

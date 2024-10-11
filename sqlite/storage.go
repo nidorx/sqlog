@@ -4,11 +4,10 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nidorx/sqlog"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 type Config struct {
@@ -33,7 +32,7 @@ type Config struct {
 	// The total size of all archived files. Once this cap is exceeded,
 	// the oldest archive files will be deleted asynchronously.
 	// (Default: 1000MB).
-	TotalSizeCapMB int32
+	MaxSizeTotalMB int32
 
 	// The maximum number of databases that can be opened simultaneously.
 	MaxOpenedDB int32
@@ -79,6 +78,7 @@ type storage struct {
 	taskIdSeq      int32        // Last task ID
 	taskMap        sync.Map     // Stores task execution outputs
 	numActiveTasks int32        // Tracks the number of active goroutines for scheduled tasks
+	closed         atomic.Bool
 	quit           chan struct{}
 	shutdown       chan struct{}
 }
@@ -108,8 +108,8 @@ func New(config *Config) (*storage, error) {
 		config.MaxFilesizeMB = 20 // ~20MB
 	}
 
-	if config.TotalSizeCapMB <= 0 {
-		config.TotalSizeCapMB = 1000 // ~1GB
+	if config.MaxSizeTotalMB <= 0 {
+		config.MaxSizeTotalMB = 1000 // ~1GB
 	}
 
 	if config.IntervalScheduledTasksMs <= 0 {
@@ -204,8 +204,16 @@ func (s *storage) Flush(chunk *sqlog.Chunk) error {
 
 // Close closes all databases and cleans up.
 func (s *storage) Close() error {
+
+	// stop routines
+	close(s.quit)
+	<-s.shutdown
+
+	// close dbs
 	for _, db := range s.dbs {
 		db.close()
 	}
+
+	s.closed.Store(true)
 	return nil
 }

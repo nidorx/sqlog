@@ -21,10 +21,6 @@
 
 **SQLog** is a **Golang** library that simplifies log management using **slog**. **SQLog** offers a lightweight and reliable solution for logging, making it perfect for developers seeking a cost-effective, high-performance way to monitor their applications.
 
-It integrates with **SQLite**, so no external database setup is required. This keeps operations simple and reduces costs, as everything runs **embedded**.
-
-
-
 ## Usage
 
 Below is an example of using **SQLog** with the SQLite storage, with the interface exposed on port `8080`. When you access `http://localhost:8080?msg=test`, any query parameter will be sent to the log.
@@ -39,7 +35,12 @@ import (
 	"strings"
 
 	"github.com/nidorx/sqlog"
+
+    // sqlite storage
 	"github.com/nidorx/sqlog/sqlite"
+
+    // sqlite driver
+    _ "github.com/mattn/go-sqlite3"
 )
 
 func main() {
@@ -141,9 +142,13 @@ The combination of these layers makes **SQLog** a robust and efficient solution 
 
 ## Requirements
 
-The builtin SQLite storage uses the package `github.com/mattn/go-sqlite3`, which is a cgo package, so you need `gcc`.
+To use the builtin SQLite Storage implementation, you need to register the driver of your choice.
 
-See the link for more details: [https://github.com/mattn/go-sqlite3?tab=readme-ov-file#installation](https://github.com/mattn/go-sqlite3?tab=readme-ov-file#installation)
+Examples:
+
+- `github.com/mattn/go-sqlite3`
+- `modernc.org/sqlite`
+
 
 ## @TODO/IDEAS/ROADMAP
 

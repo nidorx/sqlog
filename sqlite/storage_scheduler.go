@@ -67,7 +67,8 @@ func (s *storage) schedule(dbs []*storageDb, callback func(*storageDb, *sqlog.Ou
 func (s *storage) routineScheduledTasks() {
 	defer close(s.shutdown)
 
-	d := time.Duration(s.config.IntervalScheduledTasksMs)
+	d := time.Duration(s.config.IntervalScheduledTasksMs) * time.Millisecond
+	// d := 5 * time.Second
 	tick := time.NewTicker(d)
 	defer tick.Stop()
 
@@ -143,7 +144,7 @@ func (s *storage) doRoutineScheduledTasks() {
 
 	// Close idle databases
 	for _, db := range s.dbs {
-		if !db.live && db.lastQuerySec() > s.config.CloseIdleSec && db.closeSafe() {
+		if !db.live && db.lastUsedSec() > s.config.CloseIdleSec && db.closeSafe() {
 			totalOpen--
 			closedAnyDb = true
 		}

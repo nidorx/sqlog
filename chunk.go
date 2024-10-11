@@ -50,6 +50,11 @@ func (c *Chunk) Size() int64 {
 	return atomic.LoadInt64(&c.size)
 }
 
+// Size returns the number of flush retries for this chunk
+func (c *Chunk) Retries() int32 {
+	return atomic.LoadInt32(&c.retries)
+}
+
 // Init initializes the next chunks
 func (c *Chunk) Init(depth uint8) {
 	if depth > 0 {

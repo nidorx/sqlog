@@ -4,7 +4,9 @@ go 1.23
 
 toolchain go1.23.1
 
-require (
-	github.com/nidorx/sqlog v0.0.6
+require (    
+	github.com/nidorx/sqlog v0.0.7
+    modernc.org/sqlite v1.33.1
+    github.com/mattn/go-sqlite3 v1.14.24
 )
 
