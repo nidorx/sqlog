@@ -1,0 +1,20 @@
+# syntax=docker/dockerfile:1
+
+# used to test linux -race local
+# docker build --progress plain -t sqlot-test -f Dockerfile.test-race . 
+
+FROM golang:1.23.2-alpine AS builder
+
+RUN go version
+
+RUN apk --no-cache add gcc g++ 
+
+WORKDIR /go/src/demo/
+COPY . ./
+
+RUN set -Eeux && go mod tidy && go mod download && go mod verify
+
+ARG GO_TAGS
+ARG PROJECT_VERSION
+
+RUN GOOS=linux CGO_ENABLED=1 go test -v -race ./...

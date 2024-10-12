@@ -30,12 +30,12 @@ func (d *mockDriver) Open(dsn string) (driver.Conn, error) {
 	}
 
 	// simulate sqlite wal
-	file, err := os.OpenFile(url.Opaque, os.O_CREATE|os.O_APPEND, 0755)
+	file, err := os.OpenFile(url.Opaque, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0755)
 	if err != nil {
 		return nil, err
 	}
 
-	wal, err := os.OpenFile(url.Opaque+"-wal", os.O_CREATE, 0755)
+	wal, err := os.OpenFile(url.Opaque+"-wal", os.O_CREATE|os.O_RDWR, 0755)
 	if err != nil {
 		return nil, err
 	}

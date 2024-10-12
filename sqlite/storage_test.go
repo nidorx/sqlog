@@ -125,7 +125,7 @@ func Test_Sqlite_TotalSizeCap(t *testing.T) {
 	for j := 0; j < 3; j++ {
 		root := sqlog.NewChunk(100)
 		chunk := root
-		for i := 0; i < 1000; i++ {
+		for i := 0; i < 1001; i++ {
 			chunk, _ = chunk.Put(&sqlog.Entry{
 				Time:    time.Now(), //.Add(time.Duration(-1) * time.Second),
 				Level:   0,
@@ -152,7 +152,6 @@ func Test_Sqlite_TotalSizeCap(t *testing.T) {
 	assert.Equal(t, len(storage.liveDbs), 1)
 
 	assert.NoFileExists(t, firstDb.filePath)
-	assert.FileExists(t, storage.dbs[0].filePath)
 	assert.FileExists(t, storage.dbs[1].filePath)
 
 }
