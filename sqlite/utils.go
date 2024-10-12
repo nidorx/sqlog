@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func newDb(dir, prefix string, start time.Time, maxChunkAgeSec int64) *storageDb {
+func newDb(driver, dir, prefix string, start time.Time, maxChunkAgeSec int64) *storageDb {
 
 	epochStart := start.Unix()
 	name := fmt.Sprintf("%s_%d.db", prefix, epochStart)
@@ -28,6 +28,7 @@ func newDb(dir, prefix string, start time.Time, maxChunkAgeSec int64) *storageDb
 		newEpochStart:  epochStart,
 		maxChunkAgeSec: maxChunkAgeSec,
 		epochEnd:       0,
+		driver:         driver,
 	}
 }
 

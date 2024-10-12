@@ -15,6 +15,8 @@ type Config struct {
 	Prefix        string            // Prefix for the database name (default "sqlog")
 	SQLiteOptions map[string]string // SQLite connection string options (https://github.com/mattn/go-sqlite3#connection-string)
 
+	Driver string // SQLite driver name (default sqlite3)
+
 	// Allows defining a custom expression processor.
 	ExprBuilder func(expression string) (*Expr, error)
 
@@ -104,6 +106,10 @@ func New(config *Config) (*storage, error) {
 		config.Prefix = strings.ToLower(strings.Join(strings.Fields(config.Prefix), "_"))
 	}
 
+	if config.Driver == "" {
+		config.Driver = "sqlite3"
+	}
+
 	if config.MaxFilesizeMB <= 0 {
 		config.MaxFilesizeMB = 20 // ~20MB
 	}
@@ -142,7 +148,7 @@ func New(config *Config) (*storage, error) {
 	}
 
 	if len(dbs) == 0 {
-		dbs = append(dbs, newDb(config.Dir, config.Prefix, time.Now(), config.MaxChunkAgeSec))
+		dbs = append(dbs, newDb(config.Driver, config.Dir, config.Prefix, time.Now(), config.MaxChunkAgeSec))
 	}
 
 	// Initialize the active database (live)

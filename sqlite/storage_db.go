@@ -67,6 +67,7 @@ type storageDb struct {
 	db             *sql.DB    // SQLite connection object
 	taskCount      int32      // Number of scheduled tasks
 	taskMap        sync.Map   // Map of scheduled tasks
+	driver         string     // SQLite driver name
 }
 
 // schedule schedules a query execution on this instance
@@ -190,7 +191,7 @@ func (s *storageDb) connect(options map[string]string) error {
 			}
 		}
 
-		db, err := sql.Open("sqlite3", connString)
+		db, err := sql.Open(s.driver, connString)
 		if err != nil {
 			atomic.StoreInt32(&s.status, db_closed)
 			return err

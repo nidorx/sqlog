@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	dev = true
+	dev = false
 
 	log sqlog.Log
 
@@ -33,6 +33,7 @@ func init() {
 		MaxOpenedDB:     2,
 		MaxRunningTasks: 5,
 		CloseIdleSec:    10,
+		Driver:          "sqlite3",
 	})
 	if err != nil {
 		panic(err)

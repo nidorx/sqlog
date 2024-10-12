@@ -29,7 +29,7 @@ func (s *storage) doRoutineSizeCheck() {
 	// archiving dbs
 	if s.liveDbs[len(s.liveDbs)-1].size > int64(s.config.MaxFilesizeMB)*1000000 {
 		nextStart := time.Now().Add(time.Duration(s.config.IntervalSizeCheckSec * 2 * int32(time.Second)))
-		ndb := newDb(s.config.Dir, s.config.Prefix, nextStart, s.config.MaxChunkAgeSec)
+		ndb := newDb(s.config.Driver, s.config.Dir, s.config.Prefix, nextStart, s.config.MaxChunkAgeSec)
 		ndb.live = true
 		if err := ndb.connect(s.config.SQLiteOptions); err != nil {
 			slog.Warn(
