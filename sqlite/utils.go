@@ -32,7 +32,7 @@ func newDb(driver, dir, prefix string, start time.Time, maxChunkAgeSec int64) *s
 	}
 }
 
-func initDbs(dir, prefix string) (dbs []*storageDb, err error) {
+func initDbs(driver, dir, prefix string) (dbs []*storageDb, err error) {
 
 	if err = os.MkdirAll(dir, 0755); err != nil {
 		return
@@ -78,6 +78,7 @@ func initDbs(dir, prefix string) (dbs []*storageDb, err error) {
 			status:     db_closed,
 			epochStart: epochStart,
 			epochEnd:   epochEnd,
+			driver:     driver,
 		})
 
 		return nil

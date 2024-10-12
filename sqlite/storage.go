@@ -142,7 +142,7 @@ func New(config *Config) (*storage, error) {
 		config.MaxChunkAgeSec = 3600
 	}
 
-	dbs, err := initDbs(config.Dir, config.Prefix)
+	dbs, err := initDbs(config.Driver, config.Dir, config.Prefix)
 	if err != nil {
 		return nil, err
 	}
