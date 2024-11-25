@@ -6,7 +6,7 @@ toolchain go1.23.1
 
 require (
 	github.com/pmezard/go-difflib v1.0.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 )
 
 require (
